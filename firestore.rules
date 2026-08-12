@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 이 서비스는 서버 전용 Firestore 클라이언트와 IAM만 사용한다.
+    // 브라우저·모바일 SDK의 직접 접근은 읽기와 쓰기 모두 차단한다.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

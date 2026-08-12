@@ -1,0 +1,45 @@
+{
+  "name": "ai-education-today",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "초등교육을 위한 AI·디지털 교육 데일리 뉴스 갤러리",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "firebase:seed": "tsx scripts/seed-firestore.ts",
+    "news:collect": "tsx scripts/run-news-ingestion.ts",
+    "daily:dry-run": "tsx scripts/run-daily-dry-run.ts",
+    "daily:memory": "tsx scripts/run-memory-daily-pipeline.ts",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "9.0.0",
+    "@supabase/supabase-js": "2.112.3",
+    "ai": "7.0.62",
+    "fast-xml-parser": "5.10.1",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.0",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

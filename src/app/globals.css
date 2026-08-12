@@ -1,0 +1,79 @@
+:root {
+  --color-paper: #f7f1e5;
+  --color-surface: #fffdf8;
+  --color-ink: #292720;
+  --color-muted: #625d51;
+  --color-line: #d7ccbb;
+  --color-accent: #743c2c;
+  --color-accent-soft: #f0ded1;
+  --color-focus: #1b5f72;
+  --shadow-card: 0 16px 44px rgb(76 57 35 / 8%);
+  --radius-card: 1.1rem;
+  --content-width: 1200px;
+  --reading-width: 720px;
+  --font-sans: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter,
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 8% 4%, rgb(255 255 255 / 58%), transparent 27rem),
+    var(--color-paper);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.5rem;
+  background: var(--color-ink);
+  color: var(--color-surface);
+  font-weight: 700;
+  transform: translateY(-180%);
+  transition: transform 150ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
