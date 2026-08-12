@@ -218,6 +218,8 @@ LLM은 제공된 근거를 쉬운 한국어로 재구성하는 역할만 담당�
 - `DATASTORE_PROVIDER=memory`는 자격 증명 없이 샘플을 사용하고, `supabase`는 서버의 공개 게시물 저장소를 지연 로드합니다.
 - 공개 목록·상세는 publishable key로 `public.published_posts`만 조회하고, 반환 행을 기존 Zod 계약으로 다시 검증합니다. 비공개 상태, 중복 slug, 잘못된 정렬·커서·JSON은 fail-closed 처리합니다.
 - private schema의 모든 테이블은 RLS를 활성화하고 `anon`·`authenticated`에 권한을 주지 않습니다. 공개 투영은 `status = 'published'` SELECT 정책만 제공합니다.
+- 2026-08-13 기존 Supabase 프로젝트에 migration을 적용했습니다. 원격 확인 결과 private 테이블 14개, 서버 전용 RPC 5개, 강제 RLS가 생성됐고 공개 투영은 초기값 0건입니다.
+- publishable key를 사용한 Data API smoke test에서 공개 투영은 `200 []`, private 테이블은 `404`, 서버 전용 RPC는 `401`로 확인했습니다. 샘플 데이터와 기존 프로젝트 데이터는 변경하지 않았습니다.
 - 일일 실행 저장소는 서버 전용 secret key로만 RPC를 호출합니다. 키가 없으면 구성 단계에서 `STORE_UNAVAILABLE`로 중단하며 브라우저 번들·로그·README에 비밀값을 넣지 않습니다.
 - 외부 오류는 행·키·cause를 노출하지 않는 안정 오류 코드로 바꾸고, RPC 응답의 날짜·run ID·token·fence·revision을 애플리케이션에서도 재검증합니다.
 - 기존 Firestore 구현·설정 파일은 과거 수직 절편 재현을 위해 보존하지만 현재 선택 경로와 향후 운영 DB는 Supabase입니다.
@@ -412,7 +414,7 @@ npm run build
 
 완료 조건: 기존 프로젝트의 다른 테이블을 변경하지 않고 새 schema를 적용하며, 익명 사용자는 발행된 공개 투영만 읽고 자동화 쓰기는 서버 전용 RPC로만 수행합니다.
 
-상태: **코드·migration 완료, 원격 적용 승인 대기**. 프로젝트 URL과 publishable key는 로컬 환경에만 설정했고, 원격 사전 조회에서 `public.published_posts`가 아직 없음을 확인했습니다. secret key가 없으므로 자동화 쓰기는 구성 단계에서 중단됩니다.
+상태: **코드·migration 적용과 공개 권한 smoke test 완료**. 프로젝트 URL과 publishable key는 로컬 환경에만 설정했고, 공개 투영 조회 성공과 private/RPC 접근 차단을 원격에서 확인했습니다. 공개 데이터는 아직 0건이며 secret key가 없으므로 자동화 쓰기는 구성 단계에서 중단됩니다.
 
 ## 개발 역할
 
@@ -478,17 +480,18 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M6-SUPABASE-SCHEMA-001 | 최민재(루트) | 김도윤 | private 핵심·관계 테이블, 공개 published 투영, 불변 감사 trigger, 검증 publication artifact, 일일 실행·원자 발행 RPC와 RLS/GRANT migration 구현 | `supabase/migrations/**`, `tests/backend/supabase-schema.test.ts` | 정적 schema 테스트 7개·lint·typecheck 통과 | 사용자 승인 후 실제 PostgreSQL 컴파일·적용 검증 |
 | 2026-08-13 | M6-SUPABASE-REPO-001 | 최민재(루트) | 김도윤 | Data API 기반 published-only 공개 조회와 Supabase RPC 기반 fenced DailyRunStore, 서버 전용 client factory 구현 | `src/db/supabase/**`, `src/repositories/supabase-*.ts`, `tests/backend/supabase-*.test.ts` | 전체 28파일 251테스트·lint·typecheck·build·audit 0 통과 | 실제 원격 RLS·RPC smoke test |
 | 2026-08-13 | M6-GIT-001 | 최민재(루트) | 최민재 | 프로젝트 전체를 GitHub `moodoocoding/schoolnews`의 `main` 브랜치 최초 이력으로 기록하고 로컬 비밀·빌드 산출물을 제외 | 전체 추적 파일, `.gitignore`, `README.md` | 커밋 전 비밀값·추적 대상 검사 및 전체 검증 결과 재확인 | 후속 변경은 기능 단위 커밋으로 기록 |
+| 2026-08-13 | M6-SUPABASE-DEPLOY-001 | 최민재(루트) | 김도윤·최민재 | 기존 Supabase 프로젝트에 forward-only migration을 적용하고 공개 조회·private/RPC 차단·강제 RLS를 원격 검증 | 원격 Supabase schema, `.env.local`, `README.md` | private 14개·RPC 5개·RLS 강제, 공개 Data API `200 []`, private `404`, 서버 RPC `401` | secret key·영속 workspace·발행 어댑터 연결 |
 
 ## 현재 상태
 
-**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6 Supabase 코드 완료·원격 적용 대기**
+**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6 Supabase migration·공개 읽기 검증 완료**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
 - 데이터·콘텐츠·공개 화면 계약: 런타임 스키마와 회귀 테스트 구현 완료
 - 서브 에이전트 개발·검토·README 기록 방식: 확정
-- 실행 가능한 애플리케이션: 기본 메모리 샘플과 선택 가능한 Supabase 기반 메인·상세 화면 구현 완료. migration 적용 전까지 안전하게 `memory`를 유지하며 실제 화면은 개발용 샘플을 표시
-- Supabase: 새 private schema·공개 투영·RLS·일일 실행/발행 RPC migration과 공개 조회·DailyRun 저장소 구현 완료. 제공된 URL·publishable key는 `.env.local`에만 저장했고 공개 투영이 아직 없다는 사전 조회까지 완료
+- 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 게시물이 아직 없어 빈 갤러리 상태를 표시합니다.
+- Supabase: 기존 프로젝트에 새 private schema·공개 투영·RLS·일일 실행/발행 RPC migration 적용 완료. URL·publishable key는 `.env.local`에만 저장했고 공개 조회 `200 []`, private 테이블 `404`, 서버 전용 RPC `401`, 강제 RLS 활성화를 확인했습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS 1개에서 안전한 메타데이터 수집, 정규화, 중복 제거, 인메모리 멱등 저장, 후보 점수·근거 후보 생성까지 연결
 - 후보 점수와 생성 품질 게이트: 한국어 신호, 구조화 생성 어댑터, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 실제 LLM 미연결
@@ -496,8 +499,8 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - 통합 검증: ESLint 경고 0, TypeScript 통과, 28개 파일 251개 테스트 통과, 프로덕션 빌드 및 npm audit 취약점 0
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: Supabase migration은 정적 검증만 끝났고 실제 프로젝트 적용·RLS/RPC smoke test는 승인 대기입니다. secret key가 없어 일일 실행 쓰기는 아직 원격 연결되지 않았습니다. pipeline workspace의 Supabase 저장소와 모델 invocation fence ledger도 후속 구현이 필요합니다. DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. 독립 보도·실제 LLM·Cron·알림은 미연결이고 실제 화면도 샘플 상태입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
+- 알려진 제한: Supabase 읽기와 권한 경계는 원격 검증했지만 secret key가 없어 일일 실행 쓰기와 `publish_post` 성공 경로는 아직 연결·검증하지 않았습니다. pipeline workspace의 Supabase 저장소와 모델 invocation fence ledger도 후속 구현이 필요합니다. DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. 독립 보도·실제 LLM·Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
 - 생성 예산은 한 실행 저널 안에서 성공·실패 모델 사용량을 누적하고 미가격 호출을 즉시 차단하지만 실제 지출을 호출 전에 막는 hard cap은 아닙니다. 운영 연결 전에 프롬프트 토큰·최대 출력 비용 사전 예약, 날짜별 영속 ledger와 공급자 측 상한이 필요합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 
-바로 다음 작업은 **검토가 끝난 Supabase migration을 사용자 승인으로 적용하고 공개 RLS·RPC를 smoke test하는 것**입니다. 그다음 서버 전용 secret key를 배포 환경에 설정하고 pipeline workspace·발행 어댑터를 연결합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.
+바로 다음 작업은 **서버 전용 secret key를 안전한 배포 환경에 설정하고 Supabase pipeline workspace·발행 어댑터를 연결하는 것**입니다. 그다음 승인된 테스트 게시물 1건으로 원자 발행과 공개 갤러리 반영을 검증합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.
