@@ -158,4 +158,19 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.passed).toBe(false);
     expect(result.blockingReasons).toContain("UNSUPPORTED_CLAIM");
   });
+
+  it("공개 문장에 쓰인 해석 주장도 하나 이상의 근거 연결을 요구한다", () => {
+    const post = validGeneratedPost();
+    post.claims[1].kind = "interpretation";
+    post.claims[1].evidenceRefs = [];
+
+    const result = validateGeneratedPost({
+      post,
+      evidenceItems: validEvidenceItems(),
+      evidencePolicy: "primary_plus_independent",
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.blockingReasons).toContain("UNSUPPORTED_CLAIM");
+  });
 });

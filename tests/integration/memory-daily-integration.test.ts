@@ -342,7 +342,9 @@ describe("M5 메모리 일일 파이프라인 통합", () => {
         estimatedCostUsd: 0,
         hasUnpricedCalls: false,
       },
+      leaseToken: "lease-reuse-test",
       leaseFence: 2,
+      journalRevision: 1,
     });
 
     expect(reused.outputReference).toBe(firstOutput);

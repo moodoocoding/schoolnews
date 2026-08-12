@@ -222,6 +222,11 @@ LLM은 제공된 근거를 쉬운 한국어로 재구성하는 역할만 담당�
 - publishable key를 사용한 Data API smoke test에서 공개 투영은 `200 []`, private 테이블은 `404`, 서버 전용 RPC는 `401`로 확인했습니다. 샘플 데이터와 기존 프로젝트 데이터는 변경하지 않았습니다.
 - 일일 실행 저장소는 서버 전용 secret key로만 RPC를 호출합니다. 키가 없으면 구성 단계에서 `STORE_UNAVAILABLE`로 중단하며 브라우저 번들·로그·README에 비밀값을 넣지 않습니다.
 - 외부 오류는 행·키·cause를 노출하지 않는 안정 오류 코드로 바꾸고, RPC 응답의 날짜·run ID·token·fence·revision을 애플리케이션에서도 재검증합니다.
+- 후속 migration `202608130002_pipeline_workspace_rpcs.sql`은 private schema를 Data API에 노출하지 않고 `generate`·`validate` artifact를 서버 전용 RPC로 put-once 저장합니다. DB 서버 시각의 lease, token, fence, journal revision과 현재 단계를 한 트랜잭션에서 확인하며 `collect`·`score`의 범용 artifact-only 쓰기는 거부합니다.
+- 후속 migration `202608130003_content_persistence_rpcs.sql`은 수집원·기사·근거·collect artifact를 한 트랜잭션으로, 선정 주제·관계·score artifact를 다른 한 트랜잭션으로 저장합니다. 입력 payload와 artifact, 정확한 부모 참조가 일치하지 않거나 동일 지문이 다른 ID와 충돌하면 fail-closed 처리합니다.
+- 서버 쓰기 어댑터는 content persistence, pipeline workspace와 `publish_post`만 호출하며 private table REST/DML을 사용하지 않습니다. 발행 전에는 통과한 generation artifact와 결정론적으로 변환한 publication artifact의 품질 결과·부모 계보·공개 게시물 내용을 다시 대조합니다.
+- 일일 단계 컨텍스트는 로그에 남기지 않는 lease token과 fence, running checkpoint 이후 journal revision을 어댑터에 전달합니다. 결정론적 `validate`는 모델 호출 단계가 아니며, `generate`만 비용·미가격 호출 회수 규칙의 적용 대상입니다.
+- 2026-08-13 운영 PostgreSQL에서 002와 당시 003 초안을 하나의 트랜잭션으로 컴파일한 뒤 `ROLLBACK`했습니다. 컴파일은 성공했고 종료 후 신규 RPC 0개·신규 컬럼 0개를 확인했으므로 원격 DB에는 변경이 남지 않았습니다. 이후 003의 동일 ID 불변 비교를 강화했고, 이미 적용된 001의 네 RPC가 잠금 획득 뒤 서버 시각을 평가하도록 004 forward migration을 추가했습니다. 최종 002~004는 아직 적용 전이며 적용 직전 통합 컴파일을 다시 수행해야 합니다.
 - 기존 Firestore 구현·설정 파일은 과거 수직 절편 재현을 위해 보존하지만 현재 선택 경로와 향후 운영 DB는 Supabase입니다.
 
 ### 샘플 저장소와 공개 화면
@@ -239,6 +244,7 @@ LLM은 제공된 근거를 쉬운 한국어로 재구성하는 역할만 담당�
 - `scoreTopicSignals`는 30/20/20/20/10 가중치로 결정론적 100점 점수를 만들고, `evaluateTopicScoreThresholds`가 총점·초등 관련성·AI·디지털 구체성·신뢰도·새로움 최소값을 별도로 판정합니다. AI·디지털 구체성 최소값은 10/20입니다.
 - 같은 `publisherGroupId`의 여러 피드는 독립 출처로 중복 계산하지 않습니다. RSS의 짧은 요약은 HTML을 평문으로 정제해 40~800자의 `locator="RSS 요약"` 근거 후보로 만들며, 직접 사실 권한은 `none`으로 강등합니다. 따라서 공공기관 RSS 요약도 단일출처 예외를 열거나 게시 승인을 뜻하지 않습니다.
 - `validateGeneratedPost`는 형식과 길이, claim-evidence 연결, 화면에 실제 쓰인 주장과 근거, 핵심 주장 출처, 출처 독립성, 근거 ID의 정확성을 검사합니다.
+- 사실·맥락뿐 아니라 한 줄 요약과 본문의 공개 문장에 쓰인 해석 주장도 하나 이상의 실제 근거 연결이 없으면 `UNSUPPORTED_CLAIM`으로 차단합니다. 따라서 품질 통과본은 공개 게시물 변환의 출처 필수 계약과 모순되지 않습니다.
 - 단일 출처 예외는 기본 거부하며 명시적으로 확인된 공공기관 1차 자료가 직접 입증하는 단순 사실 주장만 허용합니다.
 - AI SDK 7의 `generateText`와 `Output.object`를 사용하는 공급자 중립 어댑터가 `generatedPostSchema` 구조화 출력을 두 번 검증합니다. 실제 API 없이 재현 가능한 fake 공급자도 제공하며 실제 LLM 공급자·모델 패키지는 아직 연결하지 않았습니다.
 - `generated-post-v2`는 짧은 근거 passage만 JSON 데이터로 전달하고, passage 안의 명령을 따르거나 외부 사실을 추가하지 못하도록 명시합니다. 내부 기사 ID·해시와 원문 URL은 모델 입력에서 제외하며 이메일·전화번호는 제거합니다.
@@ -393,7 +399,7 @@ npm run build
 
 완료 조건: 같은 날짜의 동시·중복 실행에서도 최대 한 건만 발행되고 중단 지점부터 안전하게 복구합니다.
 
-상태: **DB 독립 골격과 메모리 수직 절편 완료, Supabase 영속 경계 구현**. KST 실행일, 메모리 임대·fencing token·revision CAS, 불변 시도 저널, 단계 지문 재사용, 제한 재시도·중단·예산 차단, 발행 모호성·캐시 경고 보존을 구현했습니다. M2 수집·선정과 M3 복합 생성·품질을 메모리 artifact로 연결했고, Supabase에는 서버 시각·행 잠금·fence·revision CAS 기반 일일 실행 RPC를 추가했습니다. 실제 공급자·독립 출처, Cron, 알림과 전체 단계 어댑터 연결은 아직 남았습니다.
+상태: **DB 독립 골격과 메모리 수직 절편 완료, Supabase 영속 경계 구현**. KST 실행일, 메모리 임대·fencing token·revision CAS, 불변 시도 저널, 단계 지문 재사용, 제한 재시도·중단·예산 차단, 발행 모호성·캐시 경고 보존을 구현했습니다. M2 수집·선정과 M3 복합 생성·품질을 메모리 artifact로 연결했고, Supabase에는 서버 시각·행 잠금·fence·revision CAS 기반 일일 실행 RPC와 서버 쓰기 어댑터를 추가했습니다. 실제 공급자·독립 출처, Cron, 알림과 실행 단계의 Supabase 조립은 아직 남았습니다.
 
 ### M5 — 운영 검증과 승인 배포
 
@@ -415,6 +421,18 @@ npm run build
 완료 조건: 기존 프로젝트의 다른 테이블을 변경하지 않고 새 schema를 적용하며, 익명 사용자는 발행된 공개 투영만 읽고 자동화 쓰기는 서버 전용 RPC로만 수행합니다.
 
 상태: **코드·migration 적용과 공개 권한 smoke test 완료**. 프로젝트 URL과 publishable key는 로컬 환경에만 설정했고, 공개 투영 조회 성공과 private/RPC 접근 차단을 원격에서 확인했습니다. 공개 데이터는 아직 0건이며 secret key가 없으므로 자동화 쓰기는 구성 단계에서 중단됩니다.
+
+### M7 — Supabase 영속 자동화 경계
+
+- lease token·fence·journal revision을 단계 실행에서 서버 쓰기 어댑터까지 전달
+- 수집 domain rows와 collect artifact, 선정 rows와 score artifact의 원자 저장 RPC
+- generate·validate artifact의 계보·설정 지문·put-once 영속 workspace
+- 검증 통과 generation에서 공개 게시물로 가는 결정론적 publication mapping과 원자 발행 어댑터
+- private schema 직접 Data API 접근 금지, service-role 전용 `SECURITY DEFINER` RPC
+
+완료 조건: 중단·재개와 stale worker 상황에서도 domain 데이터, artifact, 품질 결과와 발행물이 갈라지지 않고 서버 전용 권한으로만 저장됩니다.
+
+상태: **어댑터·forward migration·회귀 테스트 완료, 운영 적용과 실행 조립 보류**. 002와 003의 초기 통합안은 실제 Supabase PostgreSQL에서 `ROLLBACK` 컴파일과 잔여 객체 0건을 확인했습니다. 이후 동일 ID 불변 비교를 강화한 최종 003과 locked-clock 004는 정적 회귀만 완료했으므로 적용 직전 002~004 통합 컴파일이 남았습니다. 서버 전용 secret key를 아직 받지 않았고 메모리 일일 단계가 새 Supabase 저장소를 사용하는 운영 factory도 아직 없으므로 migration을 적용하거나 실제 게시물을 쓰지 않았습니다. 실제 유료 모델을 연결하기 전에는 별도의 invocation intent·비용 예약·fence ledger가 추가로 필요합니다.
 
 ## 개발 역할
 
@@ -481,26 +499,31 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M6-SUPABASE-REPO-001 | 최민재(루트) | 김도윤 | Data API 기반 published-only 공개 조회와 Supabase RPC 기반 fenced DailyRunStore, 서버 전용 client factory 구현 | `src/db/supabase/**`, `src/repositories/supabase-*.ts`, `tests/backend/supabase-*.test.ts` | 전체 28파일 251테스트·lint·typecheck·build·audit 0 통과 | 실제 원격 RLS·RPC smoke test |
 | 2026-08-13 | M6-GIT-001 | 최민재(루트) | 최민재 | 프로젝트 전체를 GitHub `moodoocoding/schoolnews`의 `main` 브랜치 최초 이력으로 기록하고 로컬 비밀·빌드 산출물을 제외 | 전체 추적 파일, `.gitignore`, `README.md` | 커밋 전 비밀값·추적 대상 검사 및 전체 검증 결과 재확인 | 후속 변경은 기능 단위 커밋으로 기록 |
 | 2026-08-13 | M6-SUPABASE-DEPLOY-001 | 최민재(루트) | 김도윤·최민재 | 기존 Supabase 프로젝트에 forward-only migration을 적용하고 공개 조회·private/RPC 차단·강제 RLS를 원격 검증 | 원격 Supabase schema, `.env.local`, `README.md` | private 14개·RPC 5개·RLS 강제, 공개 Data API `200 []`, private `404`, 서버 RPC `401` | secret key·영속 workspace·발행 어댑터 연결 |
+| 2026-08-13 | M7-SUPABASE-WORKSPACE-001 | 최민재(루트) | 김도윤·최민재 | DB 서버 시각 lease·token·fence·revision CAS에 묶인 generate·validate artifact RPC와 Supabase workspace 저장소 구현 | `supabase/migrations/202608130002_*`, `src/db/supabase/pipeline-workspace.data-source.ts`, `src/repositories/supabase-pipeline-workspace.repository.ts`, `tests/backend/supabase-pipeline-workspace*` | 실제 PostgreSQL rollback 컴파일, workspace 18개 회귀 테스트 | 운영 migration 적용과 stage factory 연결 |
+| 2026-08-13 | M7-SUPABASE-CONTENT-001 | 최민재(루트) | 김도윤·최민재 | 수집 domain+artifact와 선정 domain+artifact를 각각 한 트랜잭션에 저장하고 동일 ID의 모든 관계형 필드를 불변 비교하는 server-only RPC·저장소 구현 | `supabase/migrations/202608130003_*`, `src/db/supabase/content-persistence.data-source.ts`, `src/repositories/supabase-content-persistence.repository.ts`, `tests/backend/supabase-content-persistence*` | 초기 PostgreSQL rollback 컴파일, 최종 정적 content persistence 회귀 통과 | 최종 통합 SQL 컴파일과 canonical survivor 정책 |
+| 2026-08-13 | M7-SUPABASE-PUBLISH-001 | 최민재(루트) | 김도윤·박서연·최민재 | 검증 generation의 품질·계보를 결정론적 publication과 대조하고 모호 응답을 자동 재시도하지 않는 원자 발행 어댑터 구현 | `src/pipeline/{quality,orchestrator}/**`, `src/db/supabase/publisher.data-source.ts`, `src/repositories/supabase-publisher.repository.ts`, `tests/{backend,content,integration}/**` | 전체 검사와 공개 문장 근거 회귀 통과 | commit receipt 조정 RPC와 승인된 실제 발행 시험 |
+| 2026-08-13 | M7-RUNNER-AUTHORITY-001 | 최민재(루트) | 최민재 | 일일 단계에 비로그 lease token·fence·journal revision을 전달하고 결정론적 validate를 모델 비용 단계에서 제외 | `src/pipeline/orchestrator/run-daily-pipeline.ts`, `tests/integration/**`, `src/db/supabase/configured-write.repositories.ts` | stale lease 컨텍스트 회귀 포함 전체 검사 통과 | Supabase 운영 stage 조립 |
+| 2026-08-13 | M7-SUPABASE-LOCKED-CLOCK-001 | 최민재(루트) | 김도윤·최민재 | 적용된 001을 수정하지 않고 acquire/checkpoint/finish/publish가 daily row lock 뒤 서버 시각을 읽도록 네 RPC를 교체하는 forward migration 추가 | `supabase/migrations/202608130004_*`, `tests/backend/supabase-locked-server-clock-schema.test.ts` | 001과 clock 위치 외 exact 비교 10개·backend/typecheck/lint 통과 | 적용 전 실제 PostgreSQL 통합 컴파일·lock wait 회귀 |
 
 ## 현재 상태
 
-**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6 Supabase migration·공개 읽기 검증 완료**
+**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6 Supabase core·공개 읽기 검증 완료 / M7 서버 쓰기 경계 구현 완료·운영 적용 보류**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
 - 데이터·콘텐츠·공개 화면 계약: 런타임 스키마와 회귀 테스트 구현 완료
 - 서브 에이전트 개발·검토·README 기록 방식: 확정
 - 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 게시물이 아직 없어 빈 갤러리 상태를 표시합니다.
-- Supabase: 기존 프로젝트에 새 private schema·공개 투영·RLS·일일 실행/발행 RPC migration 적용 완료. URL·publishable key는 `.env.local`에만 저장했고 공개 조회 `200 []`, private 테이블 `404`, 서버 전용 RPC `401`, 강제 RLS 활성화를 확인했습니다.
+- Supabase: 기존 프로젝트에는 001 core migration만 적용돼 private schema·공개 투영·RLS·기본 일일 실행/발행 RPC가 존재합니다. URL·publishable key는 `.env.local`에만 저장했고 공개 조회 `200 []`, private 테이블 `404`, 서버 전용 RPC `401`, 강제 RLS 활성화를 확인했습니다. 002 workspace, 003 content persistence, 004 locked clock은 아직 적용하지 않았습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS 1개에서 안전한 메타데이터 수집, 정규화, 중복 제거, 인메모리 멱등 저장, 후보 점수·근거 후보 생성까지 연결
 - 후보 점수와 생성 품질 게이트: 한국어 신호, 구조화 생성 어댑터, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 실제 LLM 미연결
-- 일일 자동 실행: KST 날짜별 메모리 lease·fence·저널과 설정·부모 계보를 가진 artifact workspace를 연결했습니다. 실제 RSS 수집→결정론적 주제 선정→복합 생성·품질 단계를 재개할 수 있고, 기본 단일 출처에서는 모델 0회로 정상 보류합니다. dry-run과 실제 RSS 메모리 CLI 모두 외부 게시를 하지 않습니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 28개 파일 251개 테스트 통과, 프로덕션 빌드 및 npm audit 취약점 0
+- 일일 자동 실행: KST 날짜별 메모리 lease·fence·저널과 설정·부모 계보를 가진 artifact workspace를 연결했습니다. 실제 RSS 수집→결정론적 주제 선정→복합 생성·품질 단계를 재개할 수 있고, 기본 단일 출처에서는 모델 0회로 정상 보류합니다. Supabase 서버 저장소는 구현됐지만 운영 stage factory에는 아직 조립하지 않았으며 dry-run과 실제 RSS 메모리 CLI 모두 외부 게시를 하지 않습니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 39개 파일 319개 테스트 통과, 프로덕션 빌드 및 npm audit 취약점 0을 확인했습니다. 초기 002·003 SQL은 원격 PostgreSQL 트랜잭션에서 컴파일 후 rollback했고 신규 RPC·컬럼 0개를 확인했습니다. 최종 003·004를 포함한 통합 컴파일과 lock-wait 시험은 적용 전 게이트로 남았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: Supabase 읽기와 권한 경계는 원격 검증했지만 secret key가 없어 일일 실행 쓰기와 `publish_post` 성공 경로는 아직 연결·검증하지 않았습니다. pipeline workspace의 Supabase 저장소와 모델 invocation fence ledger도 후속 구현이 필요합니다. DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. 독립 보도·실제 LLM·Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
+- 알려진 제한: Supabase pipeline workspace·content persistence·publisher 저장소는 구현됐지만 secret key와 운영 stage factory가 없어 실제 쓰기 성공 경로를 호출하지 않았습니다. 002~004 migration도 아직 원격에 적용하지 않았습니다. `publish_post` 응답 유실 뒤 commit을 재확인하는 receipt 조정 RPC와 모델 invocation intent·fence ledger가 없으므로 실제 예약 발행과 유료 LLM은 계속 비활성입니다. 같은 콘텐츠 지문의 과거 기사와 새 URL을 연결하는 canonical survivor 정책, DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. 독립 보도·Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
 - 생성 예산은 한 실행 저널 안에서 성공·실패 모델 사용량을 누적하고 미가격 호출을 즉시 차단하지만 실제 지출을 호출 전에 막는 hard cap은 아닙니다. 운영 연결 전에 프롬프트 토큰·최대 출력 비용 사전 예약, 날짜별 영속 ledger와 공급자 측 상한이 필요합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 
-바로 다음 작업은 **서버 전용 secret key를 안전한 배포 환경에 설정하고 Supabase pipeline workspace·발행 어댑터를 연결하는 것**입니다. 그다음 승인된 테스트 게시물 1건으로 원자 발행과 공개 갤러리 반영을 검증합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.
+바로 다음 작업은 **002~004 migration을 적용하기 전에 운영 stage factory와 model invocation intent ledger, publish receipt 조정 경계를 완성하는 것**입니다. 그 뒤 최종 통합 SQL 컴파일·lock-wait 회귀를 거쳐 서버 전용 secret key를 안전한 배포 환경에만 설정하고 migration/RPC smoke test, 승인된 테스트 게시물 1건의 원자 발행과 공개 갤러리 반영을 순서대로 검증합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.

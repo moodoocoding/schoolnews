@@ -523,6 +523,11 @@ describe("M4 일일 파이프라인", () => {
     });
     let collectCalls = 0;
     let normalizeCalls = 0;
+    const normalizeContexts: Array<{
+      leaseToken: string;
+      leaseFence: number;
+      journalRevision: number;
+    }> = [];
     const definitions = [
       stage("collect", async () => {
         collectCalls += 1;
@@ -541,6 +546,11 @@ describe("M4 일일 파이프라인", () => {
       }),
       stage("normalize", async (context) => {
         normalizeCalls += 1;
+        normalizeContexts.push({
+          leaseToken: context.leaseToken,
+          leaseFence: context.leaseFence,
+          journalRevision: context.journalRevision,
+        });
         if (normalizeCalls === 1) {
           notifyNormalizeStarted();
           await firstCanFinish;
@@ -602,6 +612,18 @@ describe("M4 일일 파이프라인", () => {
     ]);
     expect(collectCalls).toBe(1);
     expect(normalizeCalls).toBe(2);
+    expect(normalizeContexts).toEqual([
+      {
+        leaseToken: "lease-original",
+        leaseFence: 1,
+        journalRevision: 3,
+      },
+      {
+        leaseToken: "lease-replacement",
+        leaseFence: 2,
+        journalRevision: 5,
+      },
+    ]);
 
     releaseFirst();
     await expect(first).rejects.toThrow();

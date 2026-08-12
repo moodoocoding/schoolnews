@@ -126,15 +126,23 @@ function checkEvidenceLinks(
     blockingReasons.push("MISSING_EVIDENCE");
   }
 
+  const publicClaimIds = new Set([
+    ...post.oneLineSummary.claimIds,
+    ...post.body.flatMap((paragraph) =>
+      paragraph.sentences.flatMap((sentence) => sentence.claimIds),
+    ),
+  ]);
   const unsupportedClaims = post.claims.filter(
     (claim) =>
-      (claim.kind === "fact" || claim.kind === "context") &&
+      (claim.kind === "fact" ||
+        claim.kind === "context" ||
+        publicClaimIds.has(claim.claimId)) &&
       (claim.evidenceRefs.length === 0 ||
         claim.evidenceRefs.every((reference) => !catalog.has(reference.evidenceId))),
   );
   if (unsupportedClaims.length > 0) {
     reasons.push(
-      `근거와 연결되지 않은 사실·맥락 주장: ${unsupportedClaims
+      `근거와 연결되지 않은 사실·맥락 또는 공개 문장 주장: ${unsupportedClaims
         .map((claim) => claim.claimId)
         .join(", ")}`,
     );

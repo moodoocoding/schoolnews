@@ -70,7 +70,11 @@ export interface DailyStageContext {
   signal: AbortSignal;
   limits: DailyPipelineLimits;
   usage: DailyRunJournal["run"]["usage"];
+  /** Server-side stores must compare this opaque token without logging it. */
+  leaseToken: string;
   leaseFence: number;
+  /** Revision persisted after the runner marks this stage as running. */
+  journalRevision: number;
 }
 
 export type DailyStageFingerprintContext = Pick<
@@ -177,10 +181,10 @@ const EMPTY_USAGE = {
   estimatedCostUsd: 0,
   hasUnpricedCalls: false,
 } as const;
-const MODEL_CAPABLE_STAGES = new Set<PipelineStage>([
-  "generate",
-  "validate",
-]);
+// The current generate stage owns both generation and the optional semantic
+// evaluator. The validate stage is a deterministic publication projection and
+// must remain safely replayable without inventing an unpriced model call.
+const MODEL_CAPABLE_STAGES = new Set<PipelineStage>(["generate"]);
 const LEASE_COMPLETION_SAFETY_MS = 100;
 
 function isZeroUsage(usage: DailyStageResult["usage"]): boolean {
@@ -938,7 +942,9 @@ export async function runDailyPipeline(
             attemptNumber,
             limits: journal.run.limits,
             usage: structuredClone(journal.run.usage),
+            leaseToken: lease.leaseToken,
             leaseFence: lease.fence,
+            journalRevision: journal.revision,
           },
           effectiveTimeoutMs,
           options.abortSignal,
