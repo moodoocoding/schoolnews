@@ -6,6 +6,28 @@ import {
   MemoryPipelineWorkspaceRepository,
 } from "../src/repositories";
 import { MemoryArticleRepository } from "../src/repositories/article-memory.repository";
+import {
+  createGeminiGeneration,
+  GEMINI_FREE_MODEL_CHAIN,
+} from "../src/lib/ai/gemini-factory";
+
+const geminiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+const geminiEnabled =
+  process.env.NODE_ENV !== "test" &&
+  process.env.LLM_ENABLED === "true" &&
+  process.env.LLM_PROVIDER === "gemini" &&
+  process.env.GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED === "true";
+const gemini =
+  geminiEnabled && geminiKey
+    ? createGeminiGeneration({ apiKey: geminiKey })
+    : null;
+const generationBudget = {
+  maxModelCalls: 4,
+  maxInputTokens: 10_000,
+  maxOutputTokens: 4_000,
+  maxEstimatedCostUsd: 0.1,
+  maxCallSeconds: 300,
+} as const;
 
 const result = await runMemoryDailyPipeline({
   store: new MemoryDailyRunRepository(),
@@ -20,6 +42,14 @@ const result = await runMemoryDailyPipeline({
   },
   ownerId: "manual-memory-daily",
   collectionConfigurationId: "official-rss-live-v1",
+  generation: gemini
+    ? {
+        configurationId: `google-free:${GEMINI_FREE_MODEL_CHAIN.join(",")}`,
+        provider: gemini.provider,
+        semanticEvaluator: gemini.semanticEvaluator,
+        budget: generationBudget,
+      }
+    : undefined,
 });
 
 if (result.status === "busy") {
@@ -46,7 +76,8 @@ if (result.status === "busy") {
         usage: journal.run.usage,
         datastore: "process_memory",
         actualNewsCollection: true,
-        actualModelCalls: false,
+        actualModelCalls: journal.run.usage.modelCalls > 0,
+        geminiConfigured: gemini !== null,
         actualPublishing: false,
         firestoreUsed: false,
       },

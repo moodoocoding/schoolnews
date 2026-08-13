@@ -13,12 +13,16 @@ export interface GeneratedPostGenerationRequest {
   revisionReasons?: readonly string[] | null;
   timeoutMs: number;
   maxOutputTokens: number;
+  /** Remaining physical-call slots available to an internal model fallback. */
+  maxPhysicalCalls?: number;
   abortSignal?: AbortSignal;
 }
 
 export interface GeneratedPostGenerationResult {
   post: GeneratedPost;
   audit: ModelCallAudit;
+  /** Every physical API request, including zero-token fallback rejections. */
+  audits?: readonly ModelCallAudit[];
 }
 
 export interface GeneratedPostProvider {

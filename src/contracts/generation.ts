@@ -30,6 +30,7 @@ export const modelCallAuditSchema = z
   .object({
     callId: identifierSchema,
     attemptNumber: z.number().int().min(1).max(2),
+    routeAttempt: z.number().int().min(1).max(2).optional(),
     purpose: modelCallPurposeSchema,
     providerId: identifierSchema,
     modelId: z.string().trim().min(1).max(160),

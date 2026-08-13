@@ -45,10 +45,52 @@ const environmentSchema = z
       .regex(/^sb_secret_[A-Za-z0-9_-]{20,}$/)
       .optional(),
     LLM_API_KEY: z.string().min(1).optional(),
+    GOOGLE_GENERATIVE_AI_API_KEY: z
+      .string()
+      .trim()
+      .min(20)
+      .max(256)
+      .regex(/^\S+$/u)
+      .optional(),
+    LLM_ENABLED: z.enum(["true", "false"]).default("false"),
+    LLM_PROVIDER: z.enum(["gemini"]).optional(),
+    GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED: z
+      .enum(["true", "false"])
+      .default("false"),
     CRON_SECRET: z.string().min(16).optional(),
   })
   .strict()
   .superRefine((environment, context) => {
+    if (environment.LLM_ENABLED === "true") {
+      if (environment.NODE_ENV === "test") {
+        context.addIssue({
+          code: "custom",
+          path: ["LLM_ENABLED"],
+          message: "테스트 환경에서는 실제 LLM 호출을 활성화할 수 없습니다.",
+        });
+      }
+      if (environment.LLM_PROVIDER !== "gemini") {
+        context.addIssue({
+          code: "custom",
+          path: ["LLM_PROVIDER"],
+          message: "LLM 활성화 시 Gemini 공급자를 명시해야 합니다.",
+        });
+      }
+      if (environment.GOOGLE_GENERATIVE_AI_API_KEY === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+          message: "Gemini 활성화 시 서버 API 키가 필요합니다.",
+        });
+      }
+      if (environment.GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED !== "true") {
+        context.addIssue({
+          code: "custom",
+          path: ["GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED"],
+          message: "무료 등급 데이터 사용 조건 확인이 필요합니다.",
+        });
+      }
+    }
     if (
       environment.DATASTORE_PROVIDER === "firestore" &&
       environment.FIREBASE_PROJECT_ID === undefined
@@ -141,6 +183,11 @@ export function parseEnvironment(
     SUPABASE_PUBLISHABLE_KEY: input.SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SECRET_KEY: input.SUPABASE_SECRET_KEY,
     LLM_API_KEY: input.LLM_API_KEY,
+    GOOGLE_GENERATIVE_AI_API_KEY: input.GOOGLE_GENERATIVE_AI_API_KEY,
+    LLM_ENABLED: input.LLM_ENABLED,
+    LLM_PROVIDER: input.LLM_PROVIDER,
+    GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED:
+      input.GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED,
     CRON_SECRET: input.CRON_SECRET,
   });
 }

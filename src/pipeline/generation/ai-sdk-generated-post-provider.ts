@@ -1,4 +1,5 @@
 import {
+  APICallError,
   generateText,
   NoObjectGeneratedError,
   NoOutputGeneratedError,
@@ -113,6 +114,7 @@ export class AiSdkGeneratedPostProvider implements GeneratedPostProvider {
           throw new GenerationProviderError(error.code, {
             cause: error,
             audit: completedAudit,
+            audits: [...error.audits, completedAudit],
           });
         }
         throw error;
@@ -155,6 +157,47 @@ export class AiSdkGeneratedPostProvider implements GeneratedPostProvider {
       if (NoOutputGeneratedError.isInstance(error)) {
         throw new GenerationProviderError("INVALID_MODEL_OUTPUT", {
           cause: error,
+        });
+      }
+      if (APICallError.isInstance(error)) {
+        const status = error.statusCode;
+        const googleStatus =
+          typeof error.data === "object" &&
+          error.data !== null &&
+          "error" in error.data &&
+          typeof error.data.error === "object" &&
+          error.data.error !== null &&
+          "status" in error.data.error &&
+          typeof error.data.error.status === "string"
+            ? error.data.error.status
+            : null;
+        const exactModelEndpoint = error.url.includes(
+          `/models/${this.#metadata.modelId}:generateContent`,
+        );
+        const code =
+          status === 429 && googleStatus === "RESOURCE_EXHAUSTED"
+            ? "PROVIDER_RATE_LIMITED"
+            : status === 404 &&
+                googleStatus === "NOT_FOUND" &&
+                exactModelEndpoint
+              ? "PROVIDER_MODEL_UNAVAILABLE"
+              : status === 503 && googleStatus === "UNAVAILABLE"
+                ? "PROVIDER_UNAVAILABLE"
+                : "PROVIDER_REQUEST_FAILED";
+        const rejectedAudit = createModelCallAudit({
+          callId: this.#createCallId(request),
+          request,
+          metadata: this.#metadata,
+          startedAt,
+          finishedAt: this.#now(),
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          estimatedCostUsd: 0,
+          finishReason: code.toLowerCase(),
+          responseId: null,
+        });
+        throw new GenerationProviderError(code, {
+          cause: error,
+          audit: rejectedAudit,
         });
       }
       throw new GenerationProviderError("PROVIDER_REQUEST_FAILED", {

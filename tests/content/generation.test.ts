@@ -1,3 +1,4 @@
+import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
 
@@ -5,6 +6,7 @@ import { modelCallAuditSchema } from "../../src/contracts";
 import {
   AiSdkGeneratedPostProvider,
   DeterministicFakeGeneratedPostProvider,
+  FallbackGeneratedPostProvider,
   GenerationProviderError,
 } from "../../src/pipeline/generation";
 import {
@@ -25,6 +27,7 @@ const generationRequest = () => ({
   evidenceItems: validEvidenceItems(),
   timeoutMs: 1_000,
   maxOutputTokens: 1_200,
+  maxPhysicalCalls: 2,
 });
 
 function modelResult(text: string) {
@@ -224,6 +227,33 @@ describe("AiSdkGeneratedPostProvider", () => {
     );
     expect(model.doGenerateCalls).toHaveLength(0);
   });
+
+  it("Google 429도 RESOURCE_EXHAUSTED일 때만 fallback 가능 코드로 분류한다", async () => {
+    const apiError = (status: string) =>
+      new APICallError({
+        message: "redacted",
+        url: "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent",
+        requestBodyValues: {},
+        statusCode: 429,
+        data: { error: { code: 429, message: "redacted", status } },
+      });
+    const providerFor = (status: string) =>
+      new AiSdkGeneratedPostProvider({
+        model: new MockLanguageModelV4({
+          doGenerate: async () => {
+            throw apiError(status);
+          },
+        }),
+        metadata: providerMetadata,
+      });
+
+    await expect(
+      providerFor("RESOURCE_EXHAUSTED").generate(generationRequest()),
+    ).rejects.toMatchObject({ code: "PROVIDER_RATE_LIMITED" });
+    await expect(
+      providerFor("PERMISSION_DENIED").generate(generationRequest()),
+    ).rejects.toMatchObject({ code: "PROVIDER_REQUEST_FAILED" });
+  });
 });
 
 describe("DeterministicFakeGeneratedPostProvider", () => {
@@ -244,5 +274,64 @@ describe("DeterministicFakeGeneratedPostProvider", () => {
       totalTokens: 300,
     });
     expect(provider.calls).toHaveLength(2);
+  });
+});
+
+describe("FallbackGeneratedPostProvider", () => {
+  it("할당량 거부 호출을 보존하고 다음 무료 모델로 전환한다", async () => {
+    const rejectedAudit = {
+      ...(await new DeterministicFakeGeneratedPostProvider({
+        post: validGeneratedPost(),
+        metadata: { providerId: "google-gemini", modelId: "primary" },
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        costEstimator: () => 0,
+      }).generate(generationRequest())).audit,
+      finishReason: "provider_rate_limited",
+      responseId: null,
+    };
+    const primary = {
+      async generate() {
+        throw new GenerationProviderError("PROVIDER_RATE_LIMITED", {
+          audit: rejectedAudit,
+        });
+      },
+    };
+    const secondary = new DeterministicFakeGeneratedPostProvider({
+      post: validGeneratedPost(),
+      metadata: { providerId: "google-gemini", modelId: "fallback" },
+      costEstimator: () => 0,
+    });
+    const provider = new FallbackGeneratedPostProvider([primary, secondary]);
+
+    const result = await provider.generate(generationRequest());
+
+    expect(result.audits?.map((audit) => audit.modelId)).toEqual([
+      "primary",
+      "fallback",
+    ]);
+    expect(result.audits?.map((audit) => audit.routeAttempt)).toEqual([1, 2]);
+    expect(result.audit.modelId).toBe("fallback");
+  });
+
+  it("인증·입력 계열 공급자 오류에서는 하위 모델을 호출하지 않는다", async () => {
+    let fallbackCalls = 0;
+    const provider = new FallbackGeneratedPostProvider([
+      {
+        async generate() {
+          throw new GenerationProviderError("PROVIDER_REQUEST_FAILED");
+        },
+      },
+      {
+        async generate() {
+          fallbackCalls += 1;
+          throw new Error("호출되면 안 됨");
+        },
+      },
+    ]);
+
+    await expect(provider.generate(generationRequest())).rejects.toMatchObject({
+      code: "PROVIDER_REQUEST_FAILED",
+    });
+    expect(fallbackCalls).toBe(0);
   });
 });

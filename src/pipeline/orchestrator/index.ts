@@ -1,4 +1,6 @@
 export * from "./daily-run-store";
+export * from "./ai-sdk-semantic-evaluator";
+export * from "./fallback-semantic-evaluator";
 export * from "./generation-budget";
 export * from "./memory-daily-integration";
 export * from "./publication-mapping";

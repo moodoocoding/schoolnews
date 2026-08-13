@@ -10,7 +10,7 @@
     "firebase:seed": "tsx scripts/seed-firestore.ts",
     "news:collect": "tsx scripts/run-news-ingestion.ts",
     "daily:dry-run": "tsx scripts/run-daily-dry-run.ts",
-    "daily:memory": "tsx scripts/run-memory-daily-pipeline.ts",
+    "daily:memory": "node --env-file-if-exists=.env.local --import tsx scripts/run-memory-daily-pipeline.ts",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
@@ -21,6 +21,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.43",
     "@google-cloud/firestore": "9.0.0",
     "@supabase/supabase-js": "2.112.3",
     "ai": "7.0.62",

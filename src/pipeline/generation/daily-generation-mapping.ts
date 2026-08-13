@@ -57,6 +57,7 @@ export type DailyGenerationMapping =
 const RETRYABLE_PROVIDER_ERRORS = new Set<GenerationProviderErrorCode>([
   "PROVIDER_TIMEOUT",
   "PROVIDER_REQUEST_FAILED",
+  "PROVIDER_UNAVAILABLE",
 ]);
 
 function invalidSource(usage: GenerationUsage): DailyGenerationMapping {

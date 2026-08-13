@@ -131,4 +131,42 @@ describe("환경 변수 계약", () => {
       }),
     ).toThrow();
   });
+
+  it("Gemini는 키만으로 활성화하지 않고 공급자·데이터 사용 확인을 요구한다", () => {
+    const apiKey = `google-key-${"a".repeat(24)}`;
+    expect(
+      parseEnvironment({
+        NODE_ENV: "development",
+        GOOGLE_GENERATIVE_AI_API_KEY: apiKey,
+      }).LLM_ENABLED,
+    ).toBe("false");
+    expect(() =>
+      parseEnvironment({
+        NODE_ENV: "development",
+        LLM_ENABLED: "true",
+        GOOGLE_GENERATIVE_AI_API_KEY: apiKey,
+      }),
+    ).toThrow();
+    expect(
+      parseEnvironment({
+        NODE_ENV: "development",
+        LLM_ENABLED: "true",
+        LLM_PROVIDER: "gemini",
+        GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED: "true",
+        GOOGLE_GENERATIVE_AI_API_KEY: apiKey,
+      }).LLM_ENABLED,
+    ).toBe("true");
+  });
+
+  it("테스트 환경에서는 live Gemini opt-in도 거부한다", () => {
+    expect(() =>
+      parseEnvironment({
+        NODE_ENV: "test",
+        LLM_ENABLED: "true",
+        LLM_PROVIDER: "gemini",
+        GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED: "true",
+        GOOGLE_GENERATIVE_AI_API_KEY: `google-key-${"a".repeat(24)}`,
+      }),
+    ).toThrow();
+  });
 });

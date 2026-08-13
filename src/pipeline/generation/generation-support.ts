@@ -46,7 +46,11 @@ export function validateGenerationRequest(
     request.timeoutMs >= 1 &&
     request.timeoutMs <= 300_000 &&
     Number.isInteger(request.maxOutputTokens) &&
-    request.maxOutputTokens >= 1;
+    request.maxOutputTokens >= 1 &&
+    (request.maxPhysicalCalls === undefined ||
+      (Number.isInteger(request.maxPhysicalCalls) &&
+        request.maxPhysicalCalls >= 1 &&
+        request.maxPhysicalCalls <= 4));
   const evidenceItems: EvidenceItem[] = [];
 
   for (const item of request.evidenceItems ?? []) {
@@ -97,6 +101,7 @@ export function validateGenerationRequest(
     revisionReasons: revisionReasons ?? null,
     timeoutMs: request.timeoutMs,
     maxOutputTokens: request.maxOutputTokens,
+    maxPhysicalCalls: request.maxPhysicalCalls ?? 1,
     abortSignal: request.abortSignal,
   };
 }

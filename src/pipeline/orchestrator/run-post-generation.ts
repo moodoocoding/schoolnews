@@ -54,6 +54,7 @@ export interface PostGenerationSemanticEvaluator {
     evidenceItems: readonly PostGenerationSemanticEvidence[];
     timeoutMs: number;
     maxOutputTokens: number;
+    maxPhysicalCalls?: number;
     abortSignal?: AbortSignal;
   }): Promise<PostGenerationSemanticEvaluationResult>;
 }
@@ -78,6 +79,8 @@ export type PostGenerationSemanticEvidence = Pick<
 export interface PostGenerationSemanticEvaluationResult {
   review: unknown;
   audit: ModelCallAudit;
+  /** Every physical API request, including zero-token fallback rejections. */
+  audits?: readonly ModelCallAudit[];
 }
 
 export interface PostGenerationAttempt {
@@ -136,6 +139,21 @@ function providerErrorCode(error: unknown): GenerationProviderErrorCode | null {
   return error instanceof GenerationProviderError ? error.code : null;
 }
 
+function fallbackAuditErrorCode(
+  audit: ModelCallAudit,
+): GenerationProviderErrorCode | null {
+  switch (audit.finishReason) {
+    case "provider_rate_limited":
+      return "PROVIDER_RATE_LIMITED";
+    case "provider_model_unavailable":
+      return "PROVIDER_MODEL_UNAVAILABLE";
+    case "provider_unavailable":
+      return "PROVIDER_UNAVAILABLE";
+    default:
+      return null;
+  }
+}
+
 function validateAuditForAttempt(
   candidate: unknown,
   attemptNumber: 1 | 2,
@@ -157,7 +175,6 @@ function validateAuditForAttempt(
       .some(
       (prior) =>
         prior.providerId !== audit.providerId ||
-        prior.modelId !== audit.modelId ||
         prior.promptVersion !== audit.promptVersion,
       )
   ) {
@@ -187,7 +204,6 @@ function validateSemanticAudit(
     priorSemanticAudits.some(
       (prior) =>
         prior.providerId !== audit.providerId ||
-        prior.modelId !== audit.modelId ||
         prior.promptVersion !== audit.promptVersion,
     )
   ) {
@@ -304,41 +320,59 @@ export async function runPostGeneration(
             : null,
         timeoutMs: budget.maxCallSeconds * 1_000,
         maxOutputTokens: remainingOutputTokens,
+        maxPhysicalCalls: budget.maxModelCalls - usage.modelCalls,
         abortSignal: input.abortSignal,
       });
-      const audit = validateAuditForAttempt(
-        generated.audit,
-        attemptNumber,
-        input.evidenceItems,
-        audits,
-      );
-      usage = recordModelCall(usage, audit);
-      audits.push(audit);
-      attempts.push({
-        attemptNumber,
-        purpose: attemptNumber === 1 ? "draft" : "revision",
-        status: "succeeded",
-        audit,
-        errorCode: null,
-      });
+      const physicalAudits = generated.audits ?? [generated.audit];
+      if (
+        physicalAudits.length === 0 ||
+        physicalAudits.at(-1)?.callId !== generated.audit.callId
+      ) {
+        throw new GenerationProviderError("INVALID_MODEL_USAGE");
+      }
+      for (const [physicalIndex, candidate] of physicalAudits.entries()) {
+        const audit = validateAuditForAttempt(
+          candidate,
+          attemptNumber,
+          input.evidenceItems,
+          audits,
+        );
+        usage = recordModelCall(usage, audit);
+        audits.push(audit);
+        attempts.push({
+          attemptNumber,
+          purpose: attemptNumber === 1 ? "draft" : "revision",
+          status:
+            physicalIndex === physicalAudits.length - 1
+              ? "succeeded"
+              : "failed",
+          audit,
+          errorCode:
+            physicalIndex === physicalAudits.length - 1
+              ? null
+              : fallbackAuditErrorCode(audit),
+        });
+      }
     } catch (error) {
       let failedAudit: ModelCallAudit | null = null;
-      if (error instanceof GenerationProviderError && error.audit) {
+      const errorAudits =
+        error instanceof GenerationProviderError ? error.audits : [];
+      for (const candidate of errorAudits) {
         try {
           failedAudit = validateAuditForAttempt(
-            error.audit,
+            candidate,
             attemptNumber,
             input.evidenceItems,
             audits,
           );
+          usage = recordFailedModelCall(usage, failedAudit);
+          audits.push(failedAudit);
         } catch {
           failedAudit = null;
+          usage = recordFailedModelCall(usage, null);
         }
       }
-      usage = recordFailedModelCall(usage, failedAudit);
-      if (failedAudit) {
-        audits.push(failedAudit);
-      }
+      if (errorAudits.length === 0) usage = recordFailedModelCall(usage, null);
       attempts.push({
         attemptNumber,
         purpose: attemptNumber === 1 ? "draft" : "revision",
@@ -408,42 +442,61 @@ export async function runPostGeneration(
           evidenceItems: semanticEvidenceView(input.evidenceItems),
           timeoutMs: budget.maxCallSeconds * 1_000,
           maxOutputTokens: evaluatorOutputTokens,
+          maxPhysicalCalls: budget.maxModelCalls - usage.modelCalls,
           abortSignal: input.abortSignal,
         });
-        const audit = validateSemanticAudit(
-          evaluated.audit,
-          attemptNumber,
-          input.evidenceItems,
-          audits,
-        );
-        usage = recordModelCall(usage, audit);
-        audits.push(audit);
-        attempts.push({
-          attemptNumber,
-          purpose: "semantic_review",
-          status: "succeeded",
-          audit,
-          errorCode: null,
-        });
+        const physicalAudits = evaluated.audits ?? [evaluated.audit];
+        if (
+          physicalAudits.length === 0 ||
+          physicalAudits.at(-1)?.callId !== evaluated.audit.callId
+        ) {
+          throw new GenerationProviderError("INVALID_MODEL_USAGE");
+        }
+        for (const [physicalIndex, candidate] of physicalAudits.entries()) {
+          const audit = validateSemanticAudit(
+            candidate,
+            attemptNumber,
+            input.evidenceItems,
+            audits,
+          );
+          usage = recordModelCall(usage, audit);
+          audits.push(audit);
+          attempts.push({
+            attemptNumber,
+            purpose: "semantic_review",
+            status:
+              physicalIndex === physicalAudits.length - 1
+                ? "succeeded"
+                : "failed",
+            audit,
+            errorCode:
+              physicalIndex === physicalAudits.length - 1
+                ? null
+                : fallbackAuditErrorCode(audit),
+          });
+        }
         evaluatorReview = evaluated.review;
       } catch (error) {
         let failedAudit: ModelCallAudit | null = null;
-        if (error instanceof GenerationProviderError && error.audit) {
+        const errorAudits =
+          error instanceof GenerationProviderError ? error.audits : [];
+        for (const candidate of errorAudits) {
           try {
             failedAudit = validateSemanticAudit(
-              error.audit,
+              candidate,
               attemptNumber,
               input.evidenceItems,
               audits,
             );
+            usage = recordFailedModelCall(usage, failedAudit);
+            audits.push(failedAudit);
           } catch {
             failedAudit = null;
+            usage = recordFailedModelCall(usage, null);
           }
         }
-        usage = recordFailedModelCall(usage, failedAudit);
-        if (failedAudit) {
-          audits.push(failedAudit);
-        }
+        if (errorAudits.length === 0)
+          usage = recordFailedModelCall(usage, null);
         attempts.push({
           attemptNumber,
           purpose: "semantic_review",
