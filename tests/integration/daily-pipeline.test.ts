@@ -697,6 +697,197 @@ describe("M4 일일 파이프라인", () => {
     await expect(first).rejects.toThrow();
   });
 
+  it("중단된 publish는 영수증이 정확한 성공을 증명할 때만 재호출 없이 복구한다", async () => {
+    const store = new MemoryDailyRunRepository();
+    let currentTime = new Date("2026-08-15T16:00:00.000Z").getTime();
+    const now = () => new Date(currentTime);
+    let release: () => void = () => undefined;
+    const canFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let notifyStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve;
+    });
+    let publishCalls = 0;
+    let receiptLookups = 0;
+    const publish = stage("publish", async () => {
+      publishCalls += 1;
+      notifyStarted();
+      await canFinish;
+      return {
+        outcome: "succeeded",
+        inputFingerprint: hash("publish"),
+        outputReference: "publish-output",
+        usage: {
+          modelCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0,
+          hasUnpricedCalls: false,
+        },
+      };
+    });
+    publish.reconcileInterrupted = async () => {
+      receiptLookups += 1;
+      return {
+        outcome: "succeeded",
+        inputFingerprint: hash("publish"),
+        outputReference: "publish-output",
+        usage: {
+          modelCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0,
+          hasUnpricedCalls: false,
+        },
+      };
+    };
+
+    const first = runDailyPipeline({
+      store,
+      stages: [stage("validate"), publish],
+      limits,
+      runDate: "2026-08-16",
+      now,
+      leaseDurationMs: 20_000,
+      createLeaseToken: () => "lease-publish-original",
+    });
+    await started;
+    currentTime += 20_001;
+
+    const recovered = await runDailyPipeline({
+      store,
+      stages: [stage("validate"), publish],
+      limits,
+      runDate: "2026-08-16",
+      now,
+      leaseDurationMs: 20_000,
+      createLeaseToken: () => "lease-publish-recovered",
+    });
+
+    expect(recovered.status === "executed" && recovered.journal.run.status).toBe(
+      "succeeded",
+    );
+    expect(
+      recovered.status === "executed" &&
+        recovered.journal.run.steps.find((step) => step.stage === "publish")
+          ?.outputReference,
+    ).toBe("publish-output");
+    expect(publishCalls).toBe(1);
+    expect(receiptLookups).toBe(1);
+
+    release();
+    await expect(first).rejects.toThrow();
+  });
+
+  it("영수증 복구 checkpoint 응답 유실 뒤에도 다음 lease가 publish를 재호출하지 않는다", async () => {
+    const repository = new MemoryDailyRunRepository();
+    let failRecoveredCheckpoint = false;
+    const store: DailyRunStore = {
+      acquireLease: (input) => repository.acquireLease(input),
+      checkpoint: async (input) => {
+        const committed = await repository.checkpoint(input);
+        if (failRecoveredCheckpoint) {
+          failRecoveredCheckpoint = false;
+          throw new Error("simulated-checkpoint-response-loss");
+        }
+        return committed;
+      },
+      finish: (input) => repository.finish(input),
+      get: (runDate) => repository.get(runDate),
+    };
+    let currentTime = new Date("2026-08-16T16:00:00.000Z").getTime();
+    const now = () => new Date(currentTime);
+    let release: () => void = () => undefined;
+    const canFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let notifyStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve;
+    });
+    let publishCalls = 0;
+    let receiptLookups = 0;
+    const publish = stage("publish", async () => {
+      publishCalls += 1;
+      notifyStarted();
+      await canFinish;
+      return {
+        outcome: "succeeded",
+        inputFingerprint: hash("publish"),
+        outputReference: "publish-output",
+        usage: {
+          modelCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0,
+          hasUnpricedCalls: false,
+        },
+      };
+    });
+    publish.reconcileInterrupted = async () => {
+      receiptLookups += 1;
+      return {
+        outcome: "succeeded",
+        inputFingerprint: hash("publish"),
+        outputReference: "publish-output",
+        usage: {
+          modelCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0,
+          hasUnpricedCalls: false,
+        },
+      };
+    };
+    const definitions = [stage("validate"), publish];
+    const first = runDailyPipeline({
+      store,
+      stages: definitions,
+      limits,
+      runDate: "2026-08-17",
+      now,
+      leaseDurationMs: 20_000,
+      createLeaseToken: () => "lease-response-loss-original",
+    });
+    await started;
+    currentTime += 20_001;
+    failRecoveredCheckpoint = true;
+
+    await expect(
+      runDailyPipeline({
+        store,
+        stages: definitions,
+        limits,
+        runDate: "2026-08-17",
+        now,
+        leaseDurationMs: 20_000,
+        createLeaseToken: () => "lease-response-loss-second",
+      }),
+    ).rejects.toThrow();
+
+    currentTime += 20_001;
+    const recovered = await runDailyPipeline({
+      store,
+      stages: definitions,
+      limits,
+      runDate: "2026-08-17",
+      now,
+      leaseDurationMs: 20_000,
+      createLeaseToken: () => "lease-response-loss-third",
+    });
+
+    expect(recovered.status === "executed" && recovered.journal.run.status).toBe(
+      "succeeded",
+    );
+    expect(publishCalls).toBe(1);
+    expect(receiptLookups).toBeGreaterThanOrEqual(1);
+
+    release();
+    await expect(first).rejects.toThrow();
+  });
+
   it("정상 보류 finish 직전 중단 후에도 publish를 실행하지 않는다", async () => {
     const repository = new MemoryDailyRunRepository();
     let currentTime = new Date("2026-08-16T15:00:00.000Z").getTime();

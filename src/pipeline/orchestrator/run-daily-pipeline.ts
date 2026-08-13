@@ -97,10 +97,20 @@ export interface DailyStageDefinition {
   canRecoverInterrupted?(
     context: Readonly<DailyStageFingerprintContext>,
   ): boolean | Promise<boolean>;
+  /**
+   * Reconciles a publish side effect after lease recovery without issuing the
+   * publish mutation again. A non-null succeeded result must be backed by an
+   * exact durable receipt and is validated like a normal stage result.
+   */
+  reconcileInterrupted?(
+    context: Readonly<DailyStageFingerprintContext>,
+    signal: AbortSignal,
+  ): DailyStageResult | null | Promise<DailyStageResult | null>;
   retryPolicy: DailyRetryPolicy;
   validateOutputReference(
     outputReference: string | null,
     signal: AbortSignal,
+    context?: Readonly<DailyStageFingerprintContext>,
   ): boolean | Promise<boolean>;
   execute(context: Readonly<DailyStageContext>): Promise<DailyStageResult>;
 }
@@ -202,6 +212,7 @@ async function validateOutputReferenceWithin(
   outputReference: string | null,
   timeoutMs: number,
   outerSignal?: AbortSignal,
+  context?: Readonly<DailyStageFingerprintContext>,
 ): Promise<boolean> {
   if (timeoutMs < 1) return false;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -211,9 +222,34 @@ async function validateOutputReferenceWithin(
   return await new Promise<boolean>((resolve) => {
     const onAbort = () => resolve(false);
     signal.addEventListener("abort", onAbort, { once: true });
-    Promise.resolve(definition.validateOutputReference(outputReference, signal))
+    Promise.resolve(
+      definition.validateOutputReference(outputReference, signal, context),
+    )
       .then((valid) => resolve(valid === true))
       .catch(() => resolve(false))
+      .finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+async function reconcileInterruptedWithin(
+  definition: DailyStageDefinition,
+  context: Readonly<DailyStageFingerprintContext>,
+  timeoutMs: number,
+  outerSignal?: AbortSignal,
+): Promise<DailyStageResult | null> {
+  if (!definition.reconcileInterrupted || timeoutMs < 1) return null;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = outerSignal
+    ? AbortSignal.any([outerSignal, timeoutSignal])
+    : timeoutSignal;
+  return await new Promise<DailyStageResult | null>((resolve) => {
+    const onAbort = () => resolve(null);
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(definition.reconcileInterrupted?.(context, signal))
+      .then((result) =>
+        resolve(result === null ? null : dailyStageResultSchema.parse(result)),
+      )
+      .catch(() => resolve(null))
       .finally(() => signal.removeEventListener("abort", onAbort));
   });
 }
@@ -705,6 +741,7 @@ export async function runDailyPipeline(
           ),
         ),
         options.abortSignal,
+        { runId, runDate, stage: definition.stage },
       ));
     } catch {
       reusable = false;
@@ -720,101 +757,185 @@ export async function runDailyPipeline(
     );
     if (interrupted) {
       const recoveredAt = now();
-      const ambiguousPublish = interrupted.stage === "publish";
       const interruptedDefinition = stages.find(
         (definition) => definition.stage === interrupted.stage,
       );
-      let recoverableModelOutput = false;
+      let reconciledPublish = false;
+      let reconciledPublishResult: DailyStageResult | null = null;
       if (
-        MODEL_CAPABLE_STAGES.has(interrupted.stage) &&
-        interruptedDefinition?.canRecoverInterrupted
+        interrupted.stage === "publish" &&
+        interruptedDefinition?.reconcileInterrupted
       ) {
         try {
-          recoverableModelOutput =
-            (await interruptedDefinition.canRecoverInterrupted({
-              runId,
-              runDate,
-              stage: interrupted.stage,
-            })) === true;
+          const remainingLeaseMs =
+            new Date(lease.expiresAt).getTime() - recoveredAt.getTime();
+          const timeoutMs = Math.floor(
+            Math.min(
+              interruptedDefinition.retryPolicy.timeoutMs,
+              remainingLeaseMs - LEASE_COMPLETION_SAFETY_MS,
+            ),
+          );
+          if (timeoutMs > 0) {
+            const result = await reconcileInterruptedWithin(
+              interruptedDefinition,
+              { runId, runDate, stage: interrupted.stage },
+              timeoutMs,
+              options.abortSignal,
+            );
+            reconciledPublish =
+              result !== null &&
+              result.outcome === "succeeded" &&
+              isZeroUsage(result.usage) &&
+              result.inputFingerprint === interrupted.inputFingerprint &&
+              (await validateOutputReferenceWithin(
+                interruptedDefinition,
+                result.outputReference,
+                timeoutMs,
+                options.abortSignal,
+                { runId, runDate, stage: interrupted.stage },
+              ));
+            if (reconciledPublish) reconciledPublishResult = result;
+          }
         } catch {
-          recoverableModelOutput = false;
+          reconciledPublish = false;
+          reconciledPublishResult = null;
         }
       }
-      const uncertainModelInvocation =
-        MODEL_CAPABLE_STAGES.has(interrupted.stage) &&
-        !recoverableModelOutput;
-      const canRetry =
-        !ambiguousPublish &&
-        !uncertainModelInvocation &&
-        interrupted.attemptNumber <
-          (interruptedDefinition?.retryPolicy.maxAttempts ?? 0);
-      journal = journalWithUpdate(
-        journal,
-        recoveredAt.toISOString(),
-        (draft) => {
-          const step = draft.run.steps.find(
-            (candidate) => candidate.stage === interrupted.stage,
-          );
-          if (!step) return;
-          const errorCode = ambiguousPublish
-            ? "PUBLISH_TIMEOUT_AMBIGUOUS"
-            : uncertainModelInvocation
-              ? "BUDGET_EXCEEDED"
-              : "LEASE_EXPIRED";
-          if (uncertainModelInvocation) {
-            appendUsage(draft, {
-              modelCalls: 1,
-              inputTokens: 0,
-              outputTokens: 0,
-              estimatedCostUsd: 0,
-              hasUnpricedCalls: true,
+      if (reconciledPublish && reconciledPublishResult !== null) {
+        const reconciledAt = now();
+        journal = journalWithUpdate(
+          journal,
+          reconciledAt.toISOString(),
+          (draft) => {
+            const step = draft.run.steps.find(
+              (candidate) => candidate.stage === interrupted.stage,
+            );
+            if (!step) return;
+            step.status = "succeeded";
+            step.outputReference = reconciledPublishResult.outputReference;
+            step.finishedAt = reconciledAt.toISOString();
+            step.errorCode = null;
+            draft.run.currentStage = null;
+            draft.attempts.push({
+              stage: step.stage,
+              attemptNumber: step.attemptNumber,
+              status: "succeeded",
+              inputFingerprint: reconciledPublishResult.inputFingerprint,
+              outputReference: reconciledPublishResult.outputReference,
+              startedAt: step.startedAt ?? reconciledAt.toISOString(),
+              finishedAt: reconciledAt.toISOString(),
+              errorCode: null,
+              retryable: false,
+              retryDelayMs: 0,
             });
+          },
+        );
+        // Do not reinterpret a checkpoint failure as a missing publish
+        // receipt. A later lease owner can reconcile the exact receipt again.
+        await checkpoint(journal);
+        emit(options.onEvent, {
+          type: "step_succeeded",
+          runId,
+          runDate,
+          stage: interrupted.stage,
+          attemptNumber: interrupted.attemptNumber,
+          errorCode: null,
+        });
+      }
+      if (!reconciledPublish) {
+        const ambiguousPublish = interrupted.stage === "publish";
+        let recoverableModelOutput = false;
+        if (
+          MODEL_CAPABLE_STAGES.has(interrupted.stage) &&
+          interruptedDefinition?.canRecoverInterrupted
+        ) {
+          try {
+            recoverableModelOutput =
+              (await interruptedDefinition.canRecoverInterrupted({
+                runId,
+                runDate,
+                stage: interrupted.stage,
+              })) === true;
+          } catch {
+            recoverableModelOutput = false;
           }
-          const attempt: DailyRunAttempt = {
-            stage: step.stage,
-            attemptNumber: step.attemptNumber,
-            status: "failed",
-            inputFingerprint: step.inputFingerprint,
-            outputReference: step.outputReference,
-            startedAt: step.startedAt ?? recoveredAt.toISOString(),
-            finishedAt: recoveredAt.toISOString(),
-            errorCode,
-            retryable: canRetry,
-            retryDelayMs: 0,
-          };
-          draft.attempts.push(attempt);
-          step.status = canRetry ? "failed_retryable" : "failed";
-          step.finishedAt = recoveredAt.toISOString();
-          step.errorCode = errorCode;
-          draft.run.currentStage = canRetry ? interrupted.stage : null;
-          if (!canRetry) {
-            skipAfter(draft, interrupted.stage, recoveredAt.toISOString());
-          }
-        },
-      );
-      if (ambiguousPublish) {
-        return finishPending(
-          "blocked",
-          now(),
-          "PUBLISH_TIMEOUT_AMBIGUOUS",
+        }
+        const uncertainModelInvocation =
+          MODEL_CAPABLE_STAGES.has(interrupted.stage) &&
+          !recoverableModelOutput;
+        const canRetry =
+          !ambiguousPublish &&
+          !uncertainModelInvocation &&
+          interrupted.attemptNumber <
+            (interruptedDefinition?.retryPolicy.maxAttempts ?? 0);
+        journal = journalWithUpdate(
+          journal,
+          recoveredAt.toISOString(),
+          (draft) => {
+            const step = draft.run.steps.find(
+              (candidate) => candidate.stage === interrupted.stage,
+            );
+            if (!step) return;
+            const errorCode = ambiguousPublish
+              ? "PUBLISH_TIMEOUT_AMBIGUOUS"
+              : uncertainModelInvocation
+                ? "BUDGET_EXCEEDED"
+                : "LEASE_EXPIRED";
+            if (uncertainModelInvocation) {
+              appendUsage(draft, {
+                modelCalls: 1,
+                inputTokens: 0,
+                outputTokens: 0,
+                estimatedCostUsd: 0,
+                hasUnpricedCalls: true,
+              });
+            }
+            const attempt: DailyRunAttempt = {
+              stage: step.stage,
+              attemptNumber: step.attemptNumber,
+              status: "failed",
+              inputFingerprint: step.inputFingerprint,
+              outputReference: step.outputReference,
+              startedAt: step.startedAt ?? recoveredAt.toISOString(),
+              finishedAt: recoveredAt.toISOString(),
+              errorCode,
+              retryable: canRetry,
+              retryDelayMs: 0,
+            };
+            draft.attempts.push(attempt);
+            step.status = canRetry ? "failed_retryable" : "failed";
+            step.finishedAt = recoveredAt.toISOString();
+            step.errorCode = errorCode;
+            draft.run.currentStage = canRetry ? interrupted.stage : null;
+            if (!canRetry) {
+              skipAfter(draft, interrupted.stage, recoveredAt.toISOString());
+            }
+          },
         );
+        if (ambiguousPublish) {
+          return finishPending(
+            "blocked",
+            now(),
+            "PUBLISH_TIMEOUT_AMBIGUOUS",
+          );
+        }
+        if (uncertainModelInvocation) {
+          return finishPending("blocked", now(), "BUDGET_EXCEEDED");
+        }
+        if (!canRetry) {
+          const publishAlreadySucceeded = journal.run.steps.some(
+            (step) => step.stage === "publish" && step.status === "succeeded",
+          );
+          return finishPending(
+            interrupted.stage === "cache_refresh" && publishAlreadySucceeded
+              ? "published_with_warning"
+              : "failed",
+            now(),
+            "LEASE_EXPIRED",
+          );
+        }
+        await checkpoint(journal);
       }
-      if (uncertainModelInvocation) {
-        return finishPending("blocked", now(), "BUDGET_EXCEEDED");
-      }
-      if (!canRetry) {
-        const publishAlreadySucceeded = journal.run.steps.some(
-          (step) => step.stage === "publish" && step.status === "succeeded",
-        );
-        return finishPending(
-          interrupted.stage === "cache_refresh" && publishAlreadySucceeded
-            ? "published_with_warning"
-            : "failed",
-          now(),
-          "LEASE_EXPIRED",
-        );
-      }
-      await checkpoint(journal);
     }
   }
 
@@ -977,6 +1098,7 @@ export async function runDailyPipeline(
               ),
             ),
             options.abortSignal,
+            { runId, runDate, stage: definition.stage },
           ))
         ) {
           throw new DailyStepError("INVALID_SOURCE_DATA", false);

@@ -264,6 +264,94 @@ async function expectWorkspaceError(
 }
 
 describe("SupabasePipelineWorkspaceRepository", () => {
+  it("stage context authority를 closure 없이 exact fenced put에 사용한다", async () => {
+    const seeded = await seedRows();
+    const source = new FakeDataSource(seeded.rows);
+    const workspace = repository(source);
+
+    const stored = await workspace.putArtifactWithAuthority(
+      {
+        runId: RUN_ID,
+        stage: "generate",
+        configurationFingerprint: CONFIGURATION_FINGERPRINT,
+        parentOutputReferences: [seeded.scoreReference],
+        artifact: { kind: "post_generation", value: generationResult() },
+      },
+      {
+        runDate: "2026-08-13",
+        runId: RUN_ID,
+        stage: "generate",
+        leaseToken: "context-lease-token",
+        fence: 7,
+        expectedRevision: 12,
+      },
+    );
+
+    expect(stored.created).toBe(true);
+    expect(authority).not.toHaveBeenCalled();
+    expect(source.putRequests).toHaveLength(1);
+    expect(source.putRequests[0]).toMatchObject({
+      runDate: "2026-08-13",
+      runId: RUN_ID,
+      stage: "generate",
+      leaseToken: "context-lease-token",
+      fence: 7,
+      expectedRevision: 12,
+    });
+  });
+
+  it("explicit authority의 runId·stage·runtime 계약 불일치를 RPC 전에 거부한다", async () => {
+    const seeded = await seedRows();
+    const input = {
+      runId: RUN_ID,
+      stage: "generate" as const,
+      configurationFingerprint: CONFIGURATION_FINGERPRINT,
+      parentOutputReferences: [seeded.scoreReference],
+      artifact: { kind: "post_generation" as const, value: generationResult() },
+    };
+
+    for (const explicitAuthority of [
+      {
+        runDate: "2026-08-13",
+        runId: "different-run",
+        stage: "generate" as const,
+        leaseToken: "lease-token-1",
+        fence: 2,
+        expectedRevision: 4,
+      },
+      {
+        runDate: "2026-08-13",
+        runId: RUN_ID,
+        stage: "validate" as const,
+        leaseToken: "lease-token-1",
+        fence: 2,
+        expectedRevision: 4,
+      },
+      {
+        runDate: "2026-08-13",
+        runId: RUN_ID,
+        stage: "generate" as const,
+        leaseToken: "lease-token-1",
+        fence: 0,
+        expectedRevision: 4,
+      },
+    ]) {
+      const source = new FakeDataSource(seeded.rows);
+      await expect(
+        repository(source).putArtifactWithAuthority(input, explicitAuthority),
+      ).rejects.toMatchObject({
+        code:
+          explicitAuthority.runId !== RUN_ID
+            ? "RUN_ID_MISMATCH"
+            : explicitAuthority.stage !== "generate"
+              ? "INVALID_ARTIFACT_LINEAGE"
+              : "INVALID_RESPONSE",
+      });
+      expect(source.putRequests).toHaveLength(0);
+      expect(authority).not.toHaveBeenCalled();
+    }
+  });
+
   it("fenced generate put과 crash lookup에서 AI usage·audit를 보존한다", async () => {
     const seeded = await seedRows();
     const source = new FakeDataSource(seeded.rows);

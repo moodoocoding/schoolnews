@@ -60,6 +60,7 @@ export type {
   SupabaseTopicPersistenceReceipt,
 } from "./supabase-content-persistence.repository";
 export {
+  createSupabasePipelineArtifactDescriptor,
   SupabasePipelineWorkspaceRepository,
   SupabasePipelineWorkspaceRepositoryError,
 } from "./supabase-pipeline-workspace.repository";
@@ -67,12 +68,14 @@ export type {
   PublicationWorkspaceArtifact,
   PublicationWorkspaceArtifactValue,
   PutSupabasePipelineWorkspaceArtifactInput,
+  SupabasePipelineArtifactDescriptor,
   SupabasePipelineWorkspaceArtifact,
   SupabasePipelineWorkspaceArtifactKind,
   SupabasePipelineWorkspaceArtifactMetadata,
   SupabasePipelineWorkspaceReferenceScope,
   SupabasePipelineWorkspaceRepositoryErrorCode,
   SupabasePipelineWorkspaceStoredArtifact,
+  SupabasePipelineWorkspaceStageAuthority,
   SupabasePipelineWorkspaceWriteAuthority,
   SupabasePipelineWorkspaceWriteAuthorityProvider,
   SupabasePublicationPostMapper,

@@ -12,6 +12,7 @@ export const generationProviderErrorCodes = [
   "PROVIDER_MODEL_UNAVAILABLE",
   "PROVIDER_UNAVAILABLE",
   "PROVIDER_REQUEST_FAILED",
+  "MODEL_INVOCATION_RECOVERY_REQUIRED",
 ] as const;
 
 export type GenerationProviderErrorCode =
@@ -29,6 +30,8 @@ const messages: Record<GenerationProviderErrorCode, string> = {
   PROVIDER_MODEL_UNAVAILABLE: "요청한 모델을 현재 사용할 수 없습니다.",
   PROVIDER_UNAVAILABLE: "모델 공급자가 일시적으로 응답할 수 없습니다.",
   PROVIDER_REQUEST_FAILED: "모델 공급자 호출에 실패했습니다.",
+  MODEL_INVOCATION_RECOVERY_REQUIRED:
+    "모델 호출 장부를 확인한 뒤 실행을 복구해야 합니다.",
 };
 
 export class GenerationProviderError extends Error {

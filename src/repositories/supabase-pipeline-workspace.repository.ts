@@ -77,12 +77,25 @@ export interface SupabasePipelineWorkspaceStoredArtifact
   outputReference: string;
 }
 
+export interface SupabasePipelineArtifactDescriptor {
+  outputReference: string;
+  payloadFingerprint: string;
+  configurationFingerprint: string;
+  parentOutputReferences: string[];
+  payload: SupabasePipelineWorkspaceArtifact;
+}
+
 export interface SupabasePipelineWorkspaceWriteAuthority {
   runDate: string;
   runId: string;
   leaseToken: string;
   fence: number;
   expectedRevision: number;
+}
+
+export interface SupabasePipelineWorkspaceStageAuthority
+  extends SupabasePipelineWorkspaceWriteAuthority {
+  stage: PipelineStage;
 }
 
 export type SupabasePipelineWorkspaceWriteAuthorityProvider = (
@@ -169,6 +182,10 @@ const authoritySchema = z
     fence: z.number().int().min(1),
     expectedRevision: z.number().int().min(0),
   })
+  .strict();
+
+const stageAuthoritySchema = authoritySchema
+  .extend({ stage: pipelineStageSchema })
   .strict();
 
 type ArtifactRow = z.infer<typeof rowSchema>;
@@ -272,6 +289,94 @@ function createReference(input: {
   ].join(".");
 }
 
+/**
+ * Derives the exact immutable identity shared by the collect/score domain RPCs
+ * and the generic generate/validate workspace RPC. It performs no I/O.
+ */
+export function createSupabasePipelineArtifactDescriptor(input: Readonly<{
+  runId: string;
+  stage: PipelineStage;
+  configurationFingerprint: string;
+  parentOutputReferences: readonly string[];
+  artifact: SupabasePipelineWorkspaceArtifact;
+}>): SupabasePipelineArtifactDescriptor {
+  let runId: string;
+  let stage: PipelineStage;
+  let configurationFingerprint: string;
+  let kind: SupabasePipelineWorkspaceArtifactKind;
+  try {
+    runId = identifierSchema.parse(input.runId);
+    stage = pipelineStageSchema.parse(input.stage);
+    configurationFingerprint = sha256Schema.parse(
+      input.configurationFingerprint,
+    );
+    kind = artifactKindSchema.parse(input.artifact.kind);
+  } catch {
+    throw new PipelineWorkspaceError("INVALID_ARTIFACT");
+  }
+  if (STAGE_BY_KIND[kind] !== stage) {
+    throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+  }
+
+  const parentOutputReferences = [...input.parentOutputReferences].sort();
+  if (
+    new Set(parentOutputReferences).size !== parentOutputReferences.length ||
+    (stage === "collect" && parentOutputReferences.length !== 0) ||
+    (stage !== "collect" && parentOutputReferences.length === 0)
+  ) {
+    throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+  }
+  const requiredParentStage: PipelineStage | null =
+    stage === "score"
+      ? "collect"
+      : stage === "generate"
+        ? "score"
+        : stage === "validate"
+          ? "generate"
+          : null;
+  const stageIndex = pipelineStageSchema.options.indexOf(stage);
+  let hasRequiredParent = requiredParentStage === null;
+  for (const reference of parentOutputReferences) {
+    let parent: ParsedReference;
+    try {
+      parent = parseReference(reference);
+    } catch {
+      throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+    }
+    if (
+      parent.runId !== runId ||
+      pipelineStageSchema.options.indexOf(parent.stage) >= stageIndex
+    ) {
+      throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+    }
+    if (parent.stage === requiredParentStage) hasRequiredParent = true;
+  }
+  if (!hasRequiredParent) {
+    throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+  }
+
+  const payload = structuredClone(input.artifact);
+  const payloadFingerprint = sha256(payload);
+  const outputFingerprint = sha256({
+    configurationFingerprint,
+    kind,
+    parentOutputReferences,
+    payloadFingerprint,
+  });
+  return {
+    outputReference: createReference({
+      runId,
+      stage,
+      kind,
+      outputFingerprint,
+    }),
+    payloadFingerprint,
+    configurationFingerprint,
+    parentOutputReferences,
+    payload,
+  };
+}
+
 function assertScope(
   actual: ParsedReference,
   expected: Readonly<SupabasePipelineWorkspaceReferenceScope>,
@@ -345,13 +450,50 @@ export class SupabasePipelineWorkspaceRepository {
   ): Promise<PutPipelineWorkspaceArtifactResult> {
     let runId: string;
     let stage: PipelineStage;
+    try {
+      runId = identifierSchema.parse(input.runId);
+      stage = pipelineStageSchema.parse(input.stage);
+    } catch {
+      throw new PipelineWorkspaceError("INVALID_ARTIFACT");
+    }
+
+    let authority: SupabasePipelineWorkspaceWriteAuthority;
+    try {
+      authority = authoritySchema.parse(
+        await this.writeAuthority({ runId, stage }),
+      );
+    } catch (error) {
+      if (error instanceof DailyRunStoreError) throw error;
+      throw new SupabasePipelineWorkspaceRepositoryError("INVALID_RESPONSE");
+    }
+    return this.putArtifactWithAuthority(input, { ...authority, stage });
+  }
+
+  async putArtifactWithAuthority(
+    input: Readonly<PutSupabasePipelineWorkspaceArtifactInput>,
+    unsafeAuthority: Readonly<SupabasePipelineWorkspaceStageAuthority>,
+  ): Promise<PutPipelineWorkspaceArtifactResult> {
+    let runId: string;
+    let stage: PipelineStage;
     let configurationFingerprint: string;
+    let authority: SupabasePipelineWorkspaceStageAuthority;
     try {
       runId = identifierSchema.parse(input.runId);
       stage = pipelineStageSchema.parse(input.stage);
       configurationFingerprint = sha256Schema.parse(input.configurationFingerprint);
     } catch {
       throw new PipelineWorkspaceError("INVALID_ARTIFACT");
+    }
+    try {
+      authority = stageAuthoritySchema.parse(unsafeAuthority);
+    } catch {
+      throw new SupabasePipelineWorkspaceRepositoryError("INVALID_RESPONSE");
+    }
+    if (authority.runId !== runId) {
+      throw new DailyRunStoreError("RUN_ID_MISMATCH");
+    }
+    if (authority.stage !== stage) {
+      throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
     }
 
     const kind = artifactKindSchema.safeParse(input.artifact.kind);
@@ -376,39 +518,24 @@ export class SupabasePipelineWorkspaceRepository {
       parentOutputReferences,
       artifact: input.artifact,
     });
-    const payloadFingerprint = sha256(artifact);
-    const outputFingerprint = sha256({
-      configurationFingerprint,
-      kind: artifact.kind,
-      parentOutputReferences,
-      payloadFingerprint,
-    });
-    const outputReference = createReference({
+    const descriptor = createSupabasePipelineArtifactDescriptor({
       runId,
       stage,
-      kind: artifact.kind,
-      outputFingerprint,
+      configurationFingerprint,
+      parentOutputReferences,
+      artifact,
     });
-    let authority: SupabasePipelineWorkspaceWriteAuthority;
-    try {
-      authority = authoritySchema.parse(
-        await this.writeAuthority({ runId, stage }),
-      );
-    } catch (error) {
-      if (error instanceof DailyRunStoreError) throw error;
-      throw new SupabasePipelineWorkspaceRepositoryError("INVALID_RESPONSE");
-    }
-    if (authority.runId !== runId) {
-      throw new DailyRunStoreError("RUN_ID_MISMATCH");
-    }
-
     const response = await this.#query(() =>
       this.dataSource.putArtifact({
-        ...authority,
+        runDate: authority.runDate,
+        runId: authority.runId,
+        leaseToken: authority.leaseToken,
+        fence: authority.fence,
+        expectedRevision: authority.expectedRevision,
         stage,
         kind: artifact.kind,
-        outputReference,
-        payloadFingerprint,
+        outputReference: descriptor.outputReference,
+        payloadFingerprint: descriptor.payloadFingerprint,
         configurationFingerprint,
         parentOutputReferences,
         payload: structuredClone(artifact) as unknown as Readonly<
@@ -424,13 +551,17 @@ export class SupabasePipelineWorkspaceRepository {
       runId,
       stage,
       kind: artifact.kind,
-      outputReference,
-      payloadFingerprint,
+      outputReference: descriptor.outputReference,
+      payloadFingerprint: descriptor.payloadFingerprint,
       configurationFingerprint,
       parentOutputReferences,
       artifact,
     });
-    return { outputReference, payloadFingerprint, created: parsed.data.created };
+    return {
+      outputReference: descriptor.outputReference,
+      payloadFingerprint: descriptor.payloadFingerprint,
+      created: parsed.data.created,
+    };
   }
 
   async getArtifact(

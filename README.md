@@ -447,6 +447,17 @@ Supabase `006` migration은 DB에 고정한 MSIT 24시간 정책과 호출자 �
 
 상태: **migration·저장소·서버 설정 factory·원격 권한 검증 완료, 일일 stage 조립 보류**. 모델 호출 성공 후 audit finalize와 generation artifact 저장 사이에 프로세스가 종료되면 중복 호출은 막지만 생성 결과 본문은 복원하지 못해 그날 실행을 안전 보류합니다. 자동 복원보다 중복 모델 호출 금지를 우선한 현재 정책입니다.
 
+### M11 — 운영 파이프라인 안전 조립
+
+- `createSupabasePipelineArtifactDescriptor()`가 collect·score domain RPC와 generate·validate workspace RPC에 공통으로 쓰는 payload·설정·부모 계보 지문과 출력 참조를 결정론적으로 생성합니다.
+- 운영 stage는 `putArtifactWithAuthority()`로 runner가 running checkpoint 뒤 제공한 runDate·runId·lease token·fence·journal revision·stage를 직접 전달합니다. 공유 mutable closure 없이 runId·stage 불일치를 RPC 전에 차단합니다.
+- 생성 공급자와 의미 평가기는 fallback의 각 물리 route 안쪽에서 007 장부 wrapper를 사용합니다. fresh `prepared`만 호출하고 `reserved`는 재호출하지 않으며, finalize 응답 유실은 exact audit 조회로만 조정합니다. 예약 출력 토큰은 실제 요청 상한 이상이어야 하고 의미 평가 비용이 미확정이면 차단합니다.
+- `createSupabasePublicationStages()`는 검증된 generation과 score evidence를 결정론적 공개 게시물로 변환해 validation artifact를 저장하고, `publish_post`를 한 번만 호출합니다. ID·slug·revision·placeholder 시각은 runDate·runId·generation reference에서 결정합니다.
+- publish 응답 유실과 lease 회수는 008의 exact run·revision·validation receipt가 실제 공개 행을 증명할 때만 성공으로 복구합니다. receipt가 없거나 충돌·조회 실패면 publish를 다시 호출하지 않고 차단합니다.
+- runner는 `reconcileInterrupted`를 시간 제한·런타임 스키마·출력 검증 안에서 호출합니다. receipt 성공 뒤 checkpoint 응답이 유실돼도 다음 lease가 receipt를 다시 확인하며 publish mutation은 반복하지 않습니다.
+
+상태: **모델 장부 브리지와 validate→publish 수직 절편 완료, collect→score 운영 factory 보류**. 현재 통합 테스트는 fake generation·저장소·publisher만 사용하며 실제 RSS, Gemini, Supabase 원격 쓰기나 공개 발행을 호출하지 않습니다. collect 단계의 인메모리 article upsert와 003 원자 저장 책임을 분리하고, collect·score RPC 응답 유실 시 exact artifact 조정을 추가한 뒤 전체 운영 factory를 완성합니다.
+
 ## 개발 역할
 
 프로젝트의 개발 관점은 다음 네 프로필로 나뉩니다.
@@ -523,10 +534,12 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M10-SUPABASE-002-005-APPLY | 최민재(루트) | 김도윤·박서연·최민재 | workspace·content persistence·locked server clock·Gemini fallback audit migration을 rollback compile 후 기존 프로젝트에 순차 적용 | `supabase/migrations/202608130002_*`~`005_*`, `.env.local`(Git 제외), `README.md` | 정적 26 tests/typecheck, 원격 통합 compile+rollback, 기존 행·제약·RPC 대조, 네 migration 성공, Secret 허용·publishable 42501 확인 | invocation ledger·publish receipt 후 운영 stage 연결 |
 | 2026-08-13 | M10-MODEL-LEDGER-001 | 최민재(루트) | 김도윤·최민재 | score evidence 계보·lease/fence/revision·일일 예산에 묶인 모델 호출 intent 예약, strict audit finalize와 generate artifact 결속 구현·적용 | `supabase/migrations/202608130007_*`, `src/{db,repositories}/**model-invocation*`, `tests/backend/model-invocation*`, `README.md` | 원격 compile+rollback·적용 성공, Secret 빈 조회 `null`, publishable HTTP 401, 관련 39 tests·typecheck·lint 통과 | 운영 stage factory에서 Gemini 물리 호출 전후 조립 |
 | 2026-08-13 | M10-PUBLISH-RECEIPT-001 | 최민재(루트) | 김도윤·최민재 | 발행 응답 유실 때 run·revision·validation artifact 기준으로 commit 여부만 조정하는 server-only receipt RPC·저장소 구현·적용 | `supabase/migrations/202608130008_*`, `src/{db,repositories}/**publish-receipt*`, `tests/backend/publish-receipt*`, `README.md` | 원격 compile+rollback·적용·권한 smoke, receipt 회귀 포함 관련 39 tests·typecheck·lint 통과 | publisher timeout 경로에 조회 1회 연결 |
+| 2026-08-13 | M11-MODEL-LEDGER-BRIDGE-001 | 최민재(루트) | 박서연·최민재 | 생성·의미 평가 fallback의 각 물리 route를 007 fresh-only 예약·finalize·exact audit 조정에 연결 | `src/pipeline/generation/ledgered-generated-post-provider.ts`, `src/pipeline/orchestrator/ledgered-semantic-evaluator.ts`, `tests/content/model-invocation-ledger-bridge.test.ts` | 신규 15 tests, content 92 tests, typecheck·lint 통과 | completed post·review 영속 복구 저장소 |
+| 2026-08-13 | M11-SUPABASE-PUBLICATION-001 | 최민재(루트) | 김도윤·최민재 | 공통 artifact descriptor, explicit stage authority, 결정론적 validate publication, publish 1회와 008 기반 중단·응답 유실 복구 수직 절편 구현 | `src/{pipeline/orchestrator,repositories}/**`, `tests/{backend,integration}/**`, `README.md` | fake-only publication E2E, lease 회수·checkpoint 응답 유실 회귀, 전체 검사 | collect→score 운영 factory·Cron 연결 |
 
 ## 현재 상태
 
-**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6~M10 Supabase 001~008 적용·서버 쓰기 경계 완료 / 운영 stage 조립·예약 배포 보류**
+**단계: M0 완료 / M1 Firestore 이력 보존 / M2 인메모리 뉴스 수집 완료 / M3 생성·품질 수직 절편 완료 / M4 DB 독립 자동화 완료 / M5 메모리 E2E 완료 / M6~M10 Supabase 001~008 적용·서버 쓰기 경계 완료 / M11 모델 장부·validate→publish 조립 완료 / collect→score 운영 조립·예약 배포 보류**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
@@ -537,12 +550,12 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS 1개에서 안전한 메타데이터 수집, 정규화, 중복 제거, 인메모리 멱등 저장, 후보 점수·근거 후보 생성까지 연결
 - 후보 점수와 생성 품질 게이트: 한국어 신호, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 사용자의 무료 등급 데이터 사용 확인에 따라 로컬 Gemini opt-in을 활성화했습니다. Gemini 3.6 최소 호출은 성공했고, 학생·보호자 식별 패턴이나 전체 근거 6,000 grapheme 초과 시 모델 호출 전에 보류합니다. 첫 `daily:memory` timeout 원인은 수정했지만 24시간 정책 때문에 같은 날 원격 재실행하지 않았습니다.
-- 일일 자동 실행: KST 날짜별 메모리 lease·fence·저널과 설정·부모 계보를 가진 artifact workspace를 연결했습니다. 실제 RSS 수집→결정론적 주제 선정→복합 생성·품질 단계를 재개할 수 있고, 기본 단일 출처에서는 모델 0회로 정상 보류합니다. Supabase 서버 저장소는 구현됐지만 운영 stage factory에는 아직 조립하지 않았으며 dry-run과 실제 RSS 메모리 CLI 모두 외부 게시를 하지 않습니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 49개 파일 377개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 002~005 통합 compile+rollback 및 순차 적용, 006~008 개별 원격 compile·적용을 확인했습니다. workspace RPC는 Secret Key에서 null을 반환하고 publishable key에서는 `42501`, 모델 장부 RPC는 publishable key에서 HTTP 401로 차단됩니다. 다중 세션 lock-wait 회귀는 남았습니다.
+- 일일 자동 실행: KST 날짜별 메모리 lease·fence·저널과 설정·부모 계보를 가진 artifact workspace를 연결했습니다. 실제 RSS 수집→결정론적 주제 선정→복합 생성·품질 단계를 재개할 수 있고, 기본 단일 출처에서는 모델 0회로 정상 보류합니다. Supabase는 물리 모델 route의 007 장부 연결과 validate→publish→008 receipt 수직 절편까지 fake-only로 조립했습니다. collect→score의 003 원자 저장 운영 stage는 아직 남았으며 dry-run과 실제 RSS 메모리 CLI 모두 외부 게시를 하지 않습니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 52개 파일 402개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 발행 영수증은 실행 ID·리비전·검증 산출물과 서버 시각을 제외한 공개 본문 전체가 일치할 때만 인정하고, 한 실행 안의 확인 결과를 재사용해 일시 장애가 두 번째 조회에서 성공 발행을 보류시키지 않도록 회귀 검증했습니다. 002~005 통합 compile+rollback 및 순차 적용, 006~008 개별 원격 compile·적용을 확인했습니다. workspace RPC는 Secret Key에서 null을 반환하고 publishable key에서는 `42501`, 모델 장부 RPC는 publishable key에서 HTTP 401로 차단됩니다. 다중 세션 lock-wait 회귀는 남았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: Supabase pipeline workspace·content persistence·publisher·model invocation·publish receipt 저장소와 001~008 DB 객체는 준비됐지만 운영 stage factory는 아직 연결하지 않았습니다. 따라서 Supabase 기반 Gemini 호출과 실제 예약 발행은 계속 비활성입니다. 로컬 메모리 Gemini opt-in은 현재 공식 RSS 한 곳만으로 독립 근거 기준을 통과하지 않아 실제 기사 생성 대신 0-call 보류됩니다. 공개 근거만으로 AI 재가공을 허용하는 독립 언론 출처도 아직 없으며 교육플러스에 서면허락을 받는 것이 우선입니다. 같은 콘텐츠 지문의 과거 기사와 새 URL을 연결하는 canonical survivor 정책, DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
+- 알려진 제한: Supabase pipeline workspace·content persistence·publisher·model invocation·publish receipt 저장소와 001~008 DB 객체가 준비됐고 모델 장부와 publication stage도 연결했지만 collect→score 운영 stage factory가 아직 없습니다. 따라서 Supabase 기반 Gemini 호출과 실제 예약 발행은 계속 비활성입니다. 로컬 메모리 Gemini opt-in은 현재 공식 RSS 한 곳만으로 독립 근거 기준을 통과하지 않아 실제 기사 생성 대신 0-call 보류됩니다. 공개 근거만으로 AI 재가공을 허용하는 독립 언론 출처도 아직 없으며 교육플러스에 서면허락을 받는 것이 우선입니다. 같은 콘텐츠 지문의 과거 기사와 새 URL을 연결하는 canonical survivor 정책, DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
 - 007은 호출·입력·출력·비용을 모델 호출 전에 영속 예약하고 실제 audit를 exact 합계로 결속합니다. 다만 공급자 성공 후 audit finalize와 generation artifact 저장 사이에 중단되면 모델을 중복 호출하지 않는 대신 생성 본문을 자동 복원하지 못해 해당 실행을 안전 보류합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 
-바로 다음 작업은 **운영 stage factory를 연결해 `006 예약 → 003 collect/score → 007 모델 호출 장부 → 002 validate publication → publish_post → 008 receipt 조정` 흐름을 fake 공급자로 먼저 통합 검증하는 것**입니다. 그 뒤 승인된 테스트 게시물 1건의 원자 발행과 공개 갤러리 반영, Cron·알림·배포를 순서대로 진행합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.
+바로 다음 작업은 **003 collect→score 운영 stage를 추가해 현재 완성된 `007 모델 장부 → validate publication → publish_post → 008 receipt 조정`과 하나의 fake-only 전체 factory로 합치는 것**입니다. 그 뒤 승인된 테스트 게시물 1건의 원자 발행과 공개 갤러리 반영, Cron·알림·배포를 순서대로 진행합니다. 콘텐츠 측 병행 과제는 이용 허락이 명확한 독립 교육 보도 출처 확보입니다. 현재 공식 RSS 한 곳만으로는 의도대로 AI 호출 없이 보류되므로 두 번째 독립 출처가 있어야 실제 일일 글 작성 검증으로 넘어갈 수 있습니다.
