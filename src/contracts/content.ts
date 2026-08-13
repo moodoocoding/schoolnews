@@ -90,11 +90,11 @@ export const generatedPostSchema = z
       0,
     );
 
-    if (bodyLength > 900) {
+    if (bodyLength > 1_000) {
       context.addIssue({
         code: "custom",
         path: ["body"],
-        message: "본문은 최대 900자여야 합니다.",
+        message: "본문은 최대 1000자여야 합니다.",
       });
     }
 

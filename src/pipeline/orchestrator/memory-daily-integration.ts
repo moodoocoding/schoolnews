@@ -18,6 +18,10 @@ import {
   selectDailyTopic,
 } from "./select-daily-topic";
 import {
+  EDITORIAL_SOURCE_DATE_VERSION,
+  selectEditorialSourceDateMaterials,
+} from "./editorial-source-date";
+import {
   POST_GENERATION_PIPELINE_VERSION,
   runPostGeneration,
   type PostGenerationSemanticEvaluator,
@@ -34,7 +38,7 @@ import {
   type PipelineWorkspaceStoredArtifact,
 } from "../../repositories/memory-pipeline-workspace.repository";
 
-export const MEMORY_DAILY_INTEGRATION_VERSION = "memory-daily-integration-v1";
+export const MEMORY_DAILY_INTEGRATION_VERSION = "memory-daily-integration-v2";
 
 const EMPTY_USAGE = Object.freeze({
   modelCalls: 0,
@@ -186,6 +190,7 @@ export function createMemoryDailyStages(
   });
   const scoreConfigurationFingerprint = fingerprint({
     version: DAILY_TOPIC_SELECTION_VERSION,
+    editorialSourceDateVersion: EDITORIAL_SOURCE_DATE_VERSION,
     sources,
     previousPostTitles,
     previousContentFingerprints,
@@ -375,9 +380,14 @@ export function createMemoryDailyStages(
       if (collected.artifact.kind !== "news_ingestion") {
         throw new DailyStepError("INVALID_SOURCE_DATA", false);
       }
-      const selected = selectDailyTopic({
+      const editorialMaterials = selectEditorialSourceDateMaterials({
+        runDate: context.runDate,
         articles: collected.artifact.value.articles,
         evidenceItems: collected.artifact.value.evidenceItems,
+      });
+      const selected = selectDailyTopic({
+        articles: editorialMaterials.articles,
+        evidenceItems: editorialMaterials.evidenceItems,
         sources,
         previousPostTitles,
         previousContentFingerprints,

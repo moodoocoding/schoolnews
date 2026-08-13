@@ -78,7 +78,7 @@ describe("approved August 2026 backfill content", () => {
     }
   });
 
-  it("passes the structural and deterministic semantic quality gates for all 12 posts", () => {
+  it("기존 짧은 백필 원고는 새 600자 발행 기준으로 다시 공개할 수 없다", () => {
     AUGUST_2026_BACKFILL_TOPICS.forEach((topic, index) => {
       const evidenceItems = evidencePair(index);
       const post = generatedPostSchema.parse(
@@ -99,7 +99,10 @@ describe("approved August 2026 backfill content", () => {
         },
       });
 
-      expect(structural, topic.runDate).toMatchObject({ passed: true });
+      expect(structural, topic.runDate).toMatchObject({
+        passed: false,
+        blockingReasons: expect.arrayContaining(["CONTENT_TOO_SHORT"]),
+      });
       expect(semantic.qualityResult, topic.runDate).toMatchObject({
         passed: true,
       });

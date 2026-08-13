@@ -48,7 +48,7 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.blockingReasons).toContain("CONTENT_TOO_LONG");
   });
 
-  it("기사로 읽기에 너무 짧은 본문을 CONTENT_TOO_SHORT로 차단한다", () => {
+  it("제목·요약·질문을 제외한 body가 600자 미만이면 차단한다", () => {
     const post = validGeneratedPost();
     post.body.forEach((paragraph, index) => {
       paragraph.sentences = [
@@ -69,6 +69,72 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.passed).toBe(false);
     expect(result.blockingReasons).toContain("CONTENT_TOO_SHORT");
     expect(result.blockingReasons).not.toContain("CONTENT_TOO_LONG");
+  });
+
+  it("순수 body가 600자이면 통과하고 1000자를 넘으면 차단한다", () => {
+    const minimum = validGeneratedPost();
+    minimum.body = [
+      {
+        sentences: [
+          {
+            sentenceId: "minimum-1",
+            text: "가".repeat(200),
+            claimIds: ["claim-1"],
+          },
+        ],
+      },
+      {
+        sentences: [
+          {
+            sentenceId: "minimum-2",
+            text: "나".repeat(200),
+            claimIds: ["claim-2"],
+          },
+        ],
+      },
+      {
+        sentences: [
+          {
+            sentenceId: "minimum-3",
+            text: "다".repeat(200),
+            claimIds: ["claim-3"],
+          },
+        ],
+      },
+    ];
+    const minimumResult = validateGeneratedPost({
+      post: minimum,
+      evidenceItems: validEvidenceItems(),
+      evidencePolicy: "primary_plus_independent",
+    });
+
+    const oversized = structuredClone(minimum);
+    oversized.body[0].sentences = [
+      {
+        sentenceId: "oversized-1a",
+        text: "가".repeat(250),
+        claimIds: ["claim-1"],
+      },
+      {
+        sentenceId: "oversized-1b",
+        text: "라".repeat(250),
+        claimIds: ["claim-1"],
+      },
+      {
+        sentenceId: "oversized-1c",
+        text: "마".repeat(250),
+        claimIds: ["claim-1"],
+      },
+    ];
+    const oversizedResult = validateGeneratedPost({
+      post: oversized,
+      evidenceItems: validEvidenceItems(),
+      evidencePolicy: "primary_plus_independent",
+    });
+
+    expect(minimumResult.passed).toBe(true);
+    expect(oversizedResult.passed).toBe(false);
+    expect(oversizedResult.blockingReasons).toContain("CONTENT_TOO_LONG");
   });
 
   it("존재하지 않는 evidence ID를 MISSING_EVIDENCE로 차단한다", () => {

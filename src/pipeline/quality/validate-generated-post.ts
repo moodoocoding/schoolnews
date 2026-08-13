@@ -16,8 +16,8 @@ export const GENERATED_POST_QUALITY_VERSION = "generated-post-quality-v2";
 const CONTENT_LIMITS = {
   title: 36,
   oneLineSummary: 100,
-  body: 900,
-  minimumBody: 170,
+  body: 1_000,
+  minimumBody: 600,
   question: 80,
   minimumParagraphs: 3,
   maximumParagraphs: 5,

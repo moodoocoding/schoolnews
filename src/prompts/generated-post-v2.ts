@@ -8,7 +8,7 @@ import {
 } from "../contracts";
 import { assertEvidenceSafeForModel } from "./prompt-data-safety";
 
-export const GENERATED_POST_PROMPT_VERSION = "generated-post-v3";
+export const GENERATED_POST_PROMPT_VERSION = "generated-post-v4";
 
 export const GENERATED_POST_SYSTEM_PROMPT = `
 당신은 초등교육 AI·디지털 뉴스를 쉽고 차분한 한국어로 재구성하는 편집자입니다.
@@ -25,12 +25,12 @@ export const GENERATED_POST_SYSTEM_PROMPT = `
 
 독자에게는 아래 네 영역이 보입니다.
 1. 오늘의 한 줄 요약: oneLineSummary
-2. 무슨 일이 있었나요?: body 3~5문단. 각 문단은 단일 요약문이 아니라 배경·핵심 내용·교실과 가정에서의 의미가 자연스럽게 이어지는 2~4문장으로 작성
+2. 무슨 일이 있었나요?: body 최소 3문단. 각 문단은 단일 요약문이 아니라 배경·핵심 내용·교실과 가정에서의 의미가 자연스럽게 이어지는 2~4문장으로 작성
 3. 함께 생각해 볼 질문: questions 1~2개
 4. 참고 기사와 출처: claims와 usedEvidenceIds의 연결
 
-제목은 36자, 한 줄 요약은 100자, 본문 전체는 450~800자를 목표로 하고 900자를 넘지 마세요. 질문은 각각 80자를 넘지 마세요.
-근거가 450자 분량을 충분히 뒷받침하지 못하면 같은 말을 반복하거나 추측으로 늘리지 말고 생성을 보류하세요.
+제목은 36자, 한 줄 요약은 100자, 본문 body만 최소 600자·권고 800자·최대 1000자로 작성하세요. 제목·한 줄 요약·질문·출처 문구는 본문 길이에 포함하지 마세요. 질문은 각각 80자를 넘지 마세요.
+근거가 본문 600자를 충분히 뒷받침하지 못하면 같은 말을 반복하거나 추측으로 늘리지 말고 생성을 보류하세요.
 `.trim();
 
 const evidenceArraySchema = z

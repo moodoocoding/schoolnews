@@ -42,6 +42,10 @@ import {
   selectDailyTopic,
 } from "./select-daily-topic";
 import {
+  EDITORIAL_SOURCE_DATE_VERSION,
+  selectEditorialSourceDateMaterials,
+} from "./editorial-source-date";
+import {
   POST_GENERATION_PIPELINE_VERSION,
   runPostGeneration,
   type PostGenerationSemanticEvaluator,
@@ -59,7 +63,7 @@ import {
 import { createSupabasePublicationStages } from "./supabase-publication-integration";
 
 export const SUPABASE_DAILY_INTEGRATION_VERSION =
-  "supabase-daily-integration-v1";
+  "supabase-daily-integration-v2";
 
 const EMPTY_USAGE: GenerationUsage = Object.freeze({
   modelCalls: 0,
@@ -412,6 +416,7 @@ export function createSupabaseDailyStages(
   });
   const scoreConfigurationFingerprint = fingerprint({
     version: DAILY_TOPIC_SELECTION_VERSION,
+    editorialSourceDateVersion: EDITORIAL_SOURCE_DATE_VERSION,
     sources,
     previousPostTitles,
     previousContentFingerprints,
@@ -623,9 +628,14 @@ export function createSupabaseDailyStages(
             };
       }
 
-      const selection = selectDailyTopic({
+      const editorialMaterials = selectEditorialSourceDateMaterials({
+        runDate: context.runDate,
         articles: collected.artifact.value.articles,
         evidenceItems: collected.artifact.value.evidenceItems,
+      });
+      const selection = selectDailyTopic({
+        articles: editorialMaterials.articles,
+        evidenceItems: editorialMaterials.evidenceItems,
         sources,
         previousPostTitles,
         previousContentFingerprints,
