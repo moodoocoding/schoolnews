@@ -86,17 +86,6 @@
   margin-top: 1.35rem;
 }
 
-.prose .articleIntro {
-  margin-bottom: clamp(1.7rem, 5vw, 2.5rem);
-  padding-bottom: clamp(1.7rem, 5vw, 2.5rem);
-  border-bottom: 1px solid #ded3c1;
-  color: #493f35;
-  font-size: clamp(1.1rem, 2.8vw, 1.25rem);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.75;
-}
-
 .citations {
   display: inline-flex;
   gap: 0.18em;

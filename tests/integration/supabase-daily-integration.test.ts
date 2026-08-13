@@ -526,7 +526,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
             providerId: "supabase-fake",
             modelId: "supabase-fake-v1",
           },
-          promptVersion: "generated-post-v4",
+          promptVersion: "generated-post-v5",
           reservationPolicyVersion: "fake-reservation-v1",
           reservation: (request: { maxOutputTokens: number }) => ({
             inputTokens: 500,
