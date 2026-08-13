@@ -482,7 +482,7 @@ Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을
 - 실제 Supabase+RSS dry-run은 별도 CLI로 모델·publisher를 구조적으로 구성하지 않으며, 운영 프로젝트에서는 별도 production 확인값까지 요구합니다. dry-run도 당일 DB 실행 슬롯과 24시간 출처 간격을 소비하므로 live 전환 시험으로 같은 날짜에 연속 실행하지 않습니다.
 - 2026-08-13 테스트 게시물 `[개발용 테스트] 초등 AI 수업 확인` 1건을 정상 계보로 발행했고 공개 읽기와 로컬 홈·상세에서 확인했습니다. 이 글은 실제 뉴스가 아니며 해당 날짜의 한 건 슬롯을 사용했습니다.
 
-상태: **코드·DB·테스트 발행·허가된 독립 기관 출처 연결 완료, Vercel 운영 환경 설정 및 배포 진행 중**. EC 디지털전략 RSS는 CC BY 4.0 조건을 확인해 독립 연구 출처로 활성화했습니다. 교육플러스·AI타임스·에듀프레스·EBS는 약관·RSS·재가공 허락 조건을 충족하지 못해 활성화하지 않았습니다. 같은 사건을 직접 뒷받침하는 두 출처가 없으면 여전히 안전 보류됩니다.
+상태: **코드·DB·테스트 발행·허가된 독립 기관 출처·Vercel Production·Cron·자동 게시 활성화 완료**. EC 디지털전략 RSS는 CC BY 4.0 조건을 확인해 독립 연구 출처로 활성화했습니다. 교육플러스·AI타임스·에듀프레스·EBS는 약관·RSS·재가공 허락 조건을 충족하지 못해 활성화하지 않았습니다. 같은 사건을 직접 뒷받침하는 두 출처가 없으면 여전히 안전 보류됩니다. Production은 `https://schoolnews-neon.vercel.app`이며 Cron은 매일 UTC 22:00(KST 07:00)에 실행됩니다.
 
 ## 개발 역할
 
@@ -570,10 +570,11 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M13-CRON-001 | 최민재(루트) | 최민재 | 인증 우선 Next.js Cron endpoint, 240초 runner 한도, 매일 KST 07:00 Vercel Cron 설정과 정직한 실패 응답 구현 | `src/app/api/cron/daily/route.ts`, `src/lib/ops/configured-supabase-automation.ts`, `vercel.json`, `.env.example`, `tests/integration/cron-route.test.ts` | 무인증 401·원격 초기화 0, 전체 62 files/445 tests, lint·typecheck·build·audit 0 | Vercel 프로젝트·환경 변수·공개 배포 승인 |
 | 2026-08-13 | M14-INDEPENDENT-SOURCE-001 | 최민재(루트) | 김도윤·박서연·최민재 | CC BY 4.0 EU 디지털전략 RSS를 독립 기관·연구 출처로 추가하고 teaser 최소 수집, 24시간 정책, 한국어·영어 주제 개념 묶음을 구현·원격 적용 | `src/pipeline/{collectors,scoring,orchestrator,quality}/**`, `supabase/migrations/202608130012_*`, `scripts/smoke-rss-source.ts`, `tests/**`, `README.md` | 012 SQL Editor 적용·정책 2행 확인, 실제 EC RSS 10건·오류 0·모델/게시 0, 교차언어 회귀 통과 | 관련 없는 영문 사건 결합 방지 회귀 유지 |
 | 2026-08-13 | M14-SECRET-ROTATION-001 | 최민재(루트) | 최민재 | 대화 중 노출된 Supabase 서버 키를 Vercel 전용 키로 교체하고 로컬·Production 환경을 갱신한 뒤 이전 키 폐기 | `.env.local`(Git 제외), Vercel Production, Supabase API Keys | 새 키로 006 TOO_SOON RPC 성공, 이전 키 삭제 확인, 비밀값 Git 미추적 | 키 정기 교체와 최소 권한 유지 |
+| 2026-08-13 | M14-VERCEL-PRODUCTION-001 | 최민재(루트) | 최민재 | GitHub `main`의 `acf419d`를 Vercel Production에 배포하고 Supabase·Gemini·live 자동화 환경, 인증 Cron과 운영 도메인을 활성화 | GitHub `main`, Vercel Production 환경, `vercel.json`, `README.md` | 배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R` Ready, 홈·상세 공개 확인, Cron Enabled·`0 22 * * *`, 무인증 요청 `401 UNAUTHORIZED`, 공개 게시물 1건 유지 | 다음 KST 07:00 실제 예약 실행과 실패 알림 점검 |
 
 ## 현재 상태
 
-**단계: M0~M14 운영 코드 완료 / Supabase 001~012 적용 / 실제 개발용 게시물 1건 공개 / 허가된 독립 기관 출처 실수집 완료 / Vercel 배포 진행 중**
+**단계: M0~M14 운영 코드 완료 / Supabase 001~012 적용 / 실제 개발용 게시물 1건 공개 / 허가된 독립 기관 출처 실수집 완료 / Vercel Production·Cron·자동 게시 활성화 완료**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
@@ -584,8 +585,9 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS와 EC 디지털전략 RSS에서 안전한 메타데이터·짧은 teaser 수집, 정규화, 중복 제거, 멱등 저장, 후보 점수·근거 후보 생성까지 연결했습니다. EC 실제 스모크는 10건·오류 0이었습니다.
 - 후보 점수와 생성 품질 게이트: 한국어·영어 신호와 제한된 교차언어 개념 묶음, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현했습니다. 학생·보호자 식별 패턴이나 전체 근거 6,000 grapheme 초과 시 모델 호출 전에 보류합니다.
-- 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory, 서버 전용 운영 조립, 인증 우선 Cron endpoint와 KST 07:00 스케줄 파일을 구현했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. 외부 Vercel 프로젝트 배포와 환경 변수 설정만 승인 대기입니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 62개 파일 445개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 실제 Supabase에서 fixture collect·score, 2개 model audit, validate·publish·receipt까지 성공했고 공개 Data API와 브라우저 노출을 확인했습니다. 실제 Gemini와 실제 RSS는 이 발행 시험에서 호출하지 않았습니다.
+- 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory, 서버 전용 운영 조립, 인증 우선 Cron endpoint와 KST 07:00 스케줄을 Production에 활성화했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. Vercel의 `AUTOMATION_MODE=live`, Supabase 서버 전용 키, Gemini opt-in과 `CRON_SECRET`은 Production 환경에만 있으며 Git에 저장하지 않습니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 63개 파일 449개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 실제 Supabase에서 fixture collect·score, 2개 model audit, validate·publish·receipt까지 성공했고 공개 Data API와 브라우저 노출을 확인했습니다. Production 재배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R`가 Ready이며 홈 제목·개발용 게시물 카드·상세 네 영역·출처 2개를 실제 운영 도메인에서 확인했습니다. 실제 Gemini와 실제 RSS는 이 발행 시험에서 호출하지 않았습니다.
+- Cron 운영 검증: Vercel Cron Jobs가 Enabled이고 `/api/cron/daily`가 `0 22 * * *`에 등록됐습니다. 인증 없는 실제 Production 요청은 HTTP 401과 `{ "ok": false, "code": "UNAUTHORIZED" }`로 차단됐습니다. 대시보드의 즉시 실행과 임의 인증 헤더 주입은 브라우저 보안 정책으로 실행하지 않았으며, 다음 KST 07:00 스케줄을 최초 운영 예약 실행으로 관찰합니다. 오늘은 이미 테스트 게시물 한 건이 KST 날짜 고유 슬롯을 사용했으므로 추가 게시물을 강제로 만들지 않았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
 - 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. EC는 관련성이 높은 글로벌 피드지만 매일 한국 초등 AI 교육 기사와 같은 사건을 제공하지 않으므로 무발행일은 정상입니다. canonical survivor, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
