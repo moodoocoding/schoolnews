@@ -592,6 +592,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M15-ARTICLE-EDITORIAL-003 | 최민재(루트) | 윤서진·이현우·박서연 | 상세를 여러 스티커 상자가 아닌 하나의 편집 지면으로 재구성하고 출처 기반 도입을 본문에 포함, 향후 원고는 기사형 분량과 최소 길이 게이트를 적용 | `src/{components,styles,prompts,contracts,pipeline}/**`, `tests/{content,fixtures,integration}/**`, `README.md` | 전체 66파일·458 tests, typecheck·lint·production build·diff-check; 8월 1일 상세 데스크톱 780px·본문 4문단·장식 shadow 0, 모바일 390px 가로 넘침 0·콘솔 경고/오류 0 | 기존 공개본은 저장된 근거 범위 밖의 새 사실을 추가하지 않음 |
 | 2026-08-13 | M15-ARTICLE-EDITORIAL-DEPLOY-004 | 최민재(루트) | 최민재 | 편집형 상세와 `generated-post-v3` 품질 기준을 GitHub `main`과 Vercel Production에 반영 | GitHub `62a8479`, `https://schoolnews-neon.vercel.app` | 운영 8월 1일 글 본문 4문단·상세 border 1px·header shadow 0, 390px 가로 넘침 0·오류/경고 0 | 기존 본문 사실 분량은 불변, 향후 생성분부터 170자 최소 게이트 적용 |
 | 2026-08-13 | M16-EDITORIAL-DATE-LENGTH-001 | 최민재(루트) | 최민재 | 발행일 D-2의 KST 기사만 편집 후보로 넘기고 순수 본문을 최소 3문단·600~1000자(800자 권고)로 강제 | `src/{contracts,prompts,pipeline}/**`, `tests/{content,fixtures,integration}/**`, `README.md` | 날짜 경계·본문 600/1000 경계·일일 stage 회귀, 전체 검사 | 기존 공개 백필 원고는 새 기준에 맞춘 별도 재생성 필요 |
+| 2026-08-13 | M16-AUGUST-FIRST-REVISION-002 | 최민재(루트) | 최민재 | 8월 1일 공개 글을 7월 30일 실제 독립 보도 2건에 근거한 기사형 원고로 교체하고 기존 post·slug·과거 revision을 보존한 채 새 불변 revision으로 원자 발행 | `supabase/migrations/202608130014_*`, `scripts/revise-august-first-editorial.ts`, `tests/backend/august-first-editorial-revision-schema.test.ts`, `README.md` | 운영 RPC 적용 성공, 본문 996자·3문단, 출처 2건 모두 2026-07-30, 운영 상세 제목·본문 4개 표시 문단·출처 링크 2개 확인 | 014는 SQL Editor 수동 적용이므로 CLI migration history 대조 필요 |
 
 ## 현재 상태
 
