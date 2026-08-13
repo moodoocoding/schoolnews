@@ -338,6 +338,10 @@
     margin-left: 0;
   }
 
+  .patternVisual {
+    aspect-ratio: 16 / 9;
+  }
+
   .sampleNotice {
     align-items: flex-start;
     flex-direction: column;

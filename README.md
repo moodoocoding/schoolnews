@@ -497,12 +497,13 @@ Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을
 
 ## 개발 역할
 
-프로젝트의 개발 관점은 다음 네 프로필로 나뉩니다.
+프로젝트의 개발·디자인 관점은 다음 다섯 프로필로 나뉩니다.
 
 - [김도윤 — 백엔드·데이터 아키텍트](coder/01_김도윤_백엔드_아키텍트.md)
 - [박서연 — AI·콘텐츠 파이프라인 엔지니어](coder/02_박서연_AI_콘텐츠_엔지니어.md)
 - [이현우 — 프런트엔드·제품 엔지니어](coder/03_이현우_프런트엔드_엔지니어.md)
 - [최민재 — 플랫폼·신뢰성 엔지니어](coder/04_최민재_플랫폼_신뢰성_엔지니어.md)
+- [윤서진 — UI·브랜드 디자이너](coder/05_윤서진_UI_브랜드_디자이너.md)
 
 공통 구현 규칙과 작업 방식은 [`AGENTS.md`](AGENTS.md)를 따릅니다.
 
@@ -514,6 +515,7 @@ Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을
 - 박서연은 결정론적 후보 선정, claim·evidence 연결, LLM 역할 제한과 품질 게이트를 설계했습니다.
 - 이현우는 12건·최대 3열 갤러리, 절제된 각주, 추상 비주얼과 공개 조회 계약을 설계했습니다.
 - 최민재는 발행·캐시 분리, 비용·재시도 한도, 통합 게이트와 단계별 개발 계획을 확정했습니다.
+- 윤서진은 M15 운영 화면의 브랜드 적합성·시각 위계·카드 리듬을 검토하고, 모바일 비주얼을 16:9로 조정해 최신 글의 제목과 요약이 더 빨리 보이도록 확정했습니다.
 
 README의 단일 기록 책임자는 **최민재 역할을 맡는 루트 에이전트**입니다. 서브 에이전트는 README를 직접 수정하지 않고 완료 보고에 `README 반영 항목`을 제출합니다. 루트는 모든 통합 작업에서 코드·계약·환경 변수·사용자 동작·검증·제한 사항의 변경을 README의 현재 상태와 변경 기록에 함께 반영합니다. README 갱신이 끝나지 않은 작업은 완료로 처리하지 않습니다.
 
@@ -583,6 +585,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M14-SECRET-ROTATION-001 | 최민재(루트) | 최민재 | 대화 중 노출된 Supabase 서버 키를 Vercel 전용 키로 교체하고 로컬·Production 환경을 갱신한 뒤 이전 키 폐기 | `.env.local`(Git 제외), Vercel Production, Supabase API Keys | 새 키로 006 TOO_SOON RPC 성공, 이전 키 삭제 확인, 비밀값 Git 미추적 | 키 정기 교체와 최소 권한 유지 |
 | 2026-08-13 | M14-VERCEL-PRODUCTION-001 | 최민재(루트) | 최민재 | GitHub `main`의 `acf419d`를 Vercel Production에 배포하고 Supabase·Gemini·live 자동화 환경, 인증 Cron과 운영 도메인을 활성화 | GitHub `main`, Vercel Production 환경, `vercel.json`, `README.md` | 배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R` Ready, 홈·상세 공개 확인, Cron Enabled·`0 22 * * *`, 무인증 요청 `401 UNAUTHORIZED`, 공개 게시물 1건 유지 | 다음 KST 07:00 실제 예약 실행과 실패 알림 점검 |
 | 2026-08-13 | M15-AUGUST-BACKFILL-001 | 최민재(루트) | 김도윤·박서연·이현우·최민재 | 8월 1~12일 전용 service-role 백필 RPC, 실제 출처 기반 12개 기록과 승인 이중 확인 실행기, 스티커 시트형 갤러리·상세 리디자인 구현 | `supabase/migrations/202608130013_*`, `scripts/backfill-*`, `src/{db,repositories,components,styles,app}/**`, `tests/{backend,content}/**`, `README.md` | 날짜 범위·권한·KST 시각·콘텐츠 구조·근거·의미 품질 및 날짜별 실제 선정 사전검증 포함 전체 65파일 456테스트, typecheck·lint·build·diff-check 통과; 로컬 브라우저 렌더 확인 | 운영 013 적용, 12건 발행·사이트 확인, GitHub/Vercel 배포 |
+| 2026-08-13 | M15-DESIGN-REVIEW-001 | 최민재(루트) | 윤서진·이현우 | UI·브랜드 전담 프로필을 추가하고 Production 데스크톱·390px 모바일 화면의 브랜드 적합성, 정보 위계와 카드 리듬을 검토해 모바일 카드 비주얼을 16:9로 조정 | `coder/05_*`, `AGENTS.md`, `src/styles/gallery.module.css`, `README.md` | Production 11카드 확인, 390px 가로 넘침 0·비주얼 비율 1.76 확인, lint·typecheck·production build·diff-check 통과 | 추상 패턴 템플릿 다양화 |
 
 ## 현재 상태
 
