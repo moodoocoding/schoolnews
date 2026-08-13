@@ -100,6 +100,37 @@ export {
   SupabaseSourceAttemptRepository,
   SUPABASE_SOURCE_ATTEMPT_RPC_NAME,
 } from "./supabase-source-attempt.repository";
+export {
+  SupabaseModelInvocationError,
+  SupabaseModelInvocationRepository,
+  SUPABASE_MODEL_INVOCATION_RPC_NAMES,
+} from "./supabase-model-invocation.repository";
+export type {
+  SupabaseFinalizeModelInvocationInput,
+  SupabaseFinalizeModelInvocationReceipt,
+  SupabaseGetModelInvocationInput,
+  SupabaseGetModelInvocationReceipt,
+  SupabaseModelInvocationAuthority,
+  SupabaseModelInvocationErrorCode,
+  SupabaseModelInvocationRpcDataSource,
+  SupabaseModelInvocationRpcError,
+  SupabaseModelInvocationRpcName,
+  SupabaseModelInvocationRpcResult,
+  SupabasePrepareModelInvocationInput,
+  SupabasePrepareModelInvocationReceipt,
+} from "./supabase-model-invocation.repository";
+export {
+  SupabasePublishReceiptError,
+  SupabasePublishReceiptRepository,
+  SUPABASE_PUBLISH_RECEIPT_RPC_NAME,
+} from "./supabase-publish-receipt.repository";
+export type {
+  SupabasePublishReceiptErrorCode,
+  SupabasePublishReceiptLookup,
+  SupabasePublishReceiptRpcDataSource,
+  SupabasePublishReceiptRpcResult,
+  SupabaseReconciledPublishReceipt,
+} from "./supabase-publish-receipt.repository";
 export type {
   SourceAttemptReservation,
   SupabaseSourceAttemptRpcDataSource,

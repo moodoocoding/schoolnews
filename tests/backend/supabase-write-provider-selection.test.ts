@@ -4,13 +4,17 @@ vi.mock("server-only", () => ({}));
 
 import {
   createConfiguredSupabaseContentPersistenceRepository,
+  createConfiguredSupabaseModelInvocationRepository,
   createConfiguredSupabasePipelineWorkspaceRepository,
+  createConfiguredSupabasePublishReceiptRepository,
   createConfiguredSupabasePublisherRepository,
 } from "../../src/db/supabase/configured-write.repositories";
 import { parseEnvironment } from "../../src/lib/config/env";
 import {
   SupabaseContentPersistenceRepository,
+  SupabaseModelInvocationRepository,
   SupabasePipelineWorkspaceRepository,
+  SupabasePublishReceiptRepository,
   SupabasePublisherRepository,
 } from "../../src/repositories";
 
@@ -23,7 +27,7 @@ const supabaseEnvironment = parseEnvironment({
 });
 
 describe("Supabase 서버 쓰기 저장소 구성", () => {
-  it("Secret Key가 있는 서버 환경에서 세 쓰기 경계를 지연 생성한다", () => {
+  it("Secret Key가 있는 서버 환경에서 다섯 쓰기·조정 경계를 지연 생성한다", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     expect(
@@ -46,6 +50,12 @@ describe("Supabase 서버 쓰기 저장소 구성", () => {
     expect(
       createConfiguredSupabasePublisherRepository(supabaseEnvironment),
     ).toBeInstanceOf(SupabasePublisherRepository);
+    expect(
+      createConfiguredSupabaseModelInvocationRepository(supabaseEnvironment),
+    ).toBeInstanceOf(SupabaseModelInvocationRepository);
+    expect(
+      createConfiguredSupabasePublishReceiptRepository(supabaseEnvironment),
+    ).toBeInstanceOf(SupabasePublishReceiptRepository);
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -66,6 +76,12 @@ describe("Supabase 서버 쓰기 저장소 구성", () => {
       ).toThrow();
       expect(() =>
         createConfiguredSupabasePublisherRepository(environment),
+      ).toThrow();
+      expect(() =>
+        createConfiguredSupabaseModelInvocationRepository(environment),
+      ).toThrow();
+      expect(() =>
+        createConfiguredSupabasePublishReceiptRepository(environment),
       ).toThrow();
     }
   });

@@ -3,7 +3,9 @@ import "server-only";
 import type { Environment } from "../../lib/config/env";
 import {
   SupabaseContentPersistenceRepository,
+  SupabaseModelInvocationRepository,
   SupabasePipelineWorkspaceRepository,
+  SupabasePublishReceiptRepository,
   SupabasePublisherRepository,
   type SupabasePipelineWorkspaceWriteAuthorityProvider,
   type SupabasePublicationPostMapper,
@@ -13,9 +15,17 @@ import {
   SupabaseContentPersistenceConfigurationError,
 } from "./content-persistence.data-source";
 import {
+  createSupabaseModelInvocationRpcDataSource,
+  SupabaseModelInvocationConfigurationError,
+} from "./model-invocation.data-source";
+import {
   createSupabasePipelineWorkspaceDataSource,
   SupabasePipelineWorkspaceConfigurationError,
 } from "./pipeline-workspace.data-source";
+import {
+  createSupabasePublishReceiptRpcDataSource,
+  SupabasePublishReceiptConfigurationError,
+} from "./publish-receipt.data-source";
 import {
   createSupabasePublisherRpcDataSource,
   SupabasePublisherConfigurationError,
@@ -77,5 +87,33 @@ export function createConfiguredSupabasePublisherRepository(
   }
   return new SupabasePublisherRepository(
     createSupabasePublisherRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabaseModelInvocationRepository(
+  environment: Environment,
+): SupabaseModelInvocationRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabaseModelInvocationConfigurationError();
+  }
+  return new SupabaseModelInvocationRepository(
+    createSupabaseModelInvocationRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabasePublishReceiptRepository(
+  environment: Environment,
+): SupabasePublishReceiptRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabasePublishReceiptConfigurationError();
+  }
+  return new SupabasePublishReceiptRepository(
+    createSupabasePublishReceiptRpcDataSource(config),
   );
 }
