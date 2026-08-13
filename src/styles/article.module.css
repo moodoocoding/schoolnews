@@ -45,10 +45,10 @@
 
 .articleTitle {
   margin: 0.7rem 0 0;
-  font-size: clamp(2rem, 8vw, 3.65rem);
+  font-size: clamp(2rem, 6.5vw, 3rem);
   font-weight: 900;
-  letter-spacing: -0.06em;
-  line-height: 1.12;
+  letter-spacing: -0.055em;
+  line-height: 1.14;
 }
 
 .leadSection,

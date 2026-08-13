@@ -586,6 +586,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M14-VERCEL-PRODUCTION-001 | 최민재(루트) | 최민재 | GitHub `main`의 `acf419d`를 Vercel Production에 배포하고 Supabase·Gemini·live 자동화 환경, 인증 Cron과 운영 도메인을 활성화 | GitHub `main`, Vercel Production 환경, `vercel.json`, `README.md` | 배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R` Ready, 홈·상세 공개 확인, Cron Enabled·`0 22 * * *`, 무인증 요청 `401 UNAUTHORIZED`, 공개 게시물 1건 유지 | 다음 KST 07:00 실제 예약 실행과 실패 알림 점검 |
 | 2026-08-13 | M15-AUGUST-BACKFILL-001 | 최민재(루트) | 김도윤·박서연·이현우·최민재 | 8월 1~12일 전용 service-role 백필 RPC, 실제 출처 기반 12개 기록과 승인 이중 확인 실행기, 스티커 시트형 갤러리·상세 리디자인 구현 | `supabase/migrations/202608130013_*`, `scripts/backfill-*`, `src/{db,repositories,components,styles,app}/**`, `tests/{backend,content}/**`, `README.md` | 날짜 범위·권한·KST 시각·콘텐츠 구조·근거·의미 품질 및 날짜별 실제 선정 사전검증 포함 전체 65파일 456테스트, typecheck·lint·build·diff-check 통과; 로컬 브라우저 렌더 확인 | 운영 013 적용, 12건 발행·사이트 확인, GitHub/Vercel 배포 |
 | 2026-08-13 | M15-DESIGN-REVIEW-001 | 최민재(루트) | 윤서진·이현우 | UI·브랜드 전담 프로필을 추가하고 Production 데스크톱·390px 모바일 화면의 브랜드 적합성, 정보 위계와 카드 리듬을 검토해 모바일 카드 비주얼을 16:9로 조정 | `coder/05_*`, `AGENTS.md`, `src/styles/gallery.module.css`, `README.md` | Production 11카드 확인, 390px 가로 넘침 0·비주얼 비율 1.76 확인, lint·typecheck·production build·diff-check 통과 | 추상 패턴 템플릿 다양화 |
+| 2026-08-13 | M15-DESIGN-TITLE-002 | 최민재(루트) | 윤서진·이현우 | 상세 제목의 데스크톱 최대 크기를 읽기 폭에 맞춰 조정해 짧은 마지막 단어만 다음 줄로 떨어지는 고아 단어 현상을 제거하고, 긴 제목의 자연스러운 줄바꿈은 유지 | `src/styles/article.module.css`, `README.md` | 해당 8월 1일 제목 데스크톱 48px·1줄, 모바일 32px·2줄, 양쪽 가로 넘침 0, typecheck·lint·production build·diff-check 통과 | 없음 |
 
 ## 현재 상태
 
