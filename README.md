@@ -588,6 +588,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M15-DESIGN-REVIEW-001 | 최민재(루트) | 윤서진·이현우 | UI·브랜드 전담 프로필을 추가하고 Production 데스크톱·390px 모바일 화면의 브랜드 적합성, 정보 위계와 카드 리듬을 검토해 모바일 카드 비주얼을 16:9로 조정 | `coder/05_*`, `AGENTS.md`, `src/styles/gallery.module.css`, `README.md` | Production 11카드 확인, 390px 가로 넘침 0·비주얼 비율 1.76 확인, lint·typecheck·production build·diff-check 통과 | 추상 패턴 템플릿 다양화 |
 | 2026-08-13 | M15-DESIGN-TITLE-002 | 최민재(루트) | 윤서진·이현우 | 상세 제목의 데스크톱 최대 크기를 읽기 폭에 맞춰 조정해 짧은 마지막 단어만 다음 줄로 떨어지는 고아 단어 현상을 제거하고, 긴 제목의 자연스러운 줄바꿈은 유지 | `src/styles/article.module.css`, `README.md` | 해당 8월 1일 제목 데스크톱 48px·1줄, 모바일 32px·2줄, 양쪽 가로 넘침 0, typecheck·lint·production build·diff-check 통과 | 없음 |
 | 2026-08-13 | M15-ARTICLE-EDITORIAL-003 | 최민재(루트) | 윤서진·이현우·박서연 | 상세를 여러 스티커 상자가 아닌 하나의 편집 지면으로 재구성하고 출처 기반 도입을 본문에 포함, 향후 원고는 기사형 분량과 최소 길이 게이트를 적용 | `src/{components,styles,prompts,contracts,pipeline}/**`, `tests/{content,fixtures,integration}/**`, `README.md` | 전체 66파일·458 tests, typecheck·lint·production build·diff-check; 8월 1일 상세 데스크톱 780px·본문 4문단·장식 shadow 0, 모바일 390px 가로 넘침 0·콘솔 경고/오류 0 | 기존 공개본은 저장된 근거 범위 밖의 새 사실을 추가하지 않음 |
+| 2026-08-13 | M15-ARTICLE-EDITORIAL-DEPLOY-004 | 최민재(루트) | 최민재 | 편집형 상세와 `generated-post-v3` 품질 기준을 GitHub `main`과 Vercel Production에 반영 | GitHub `62a8479`, `https://schoolnews-neon.vercel.app` | 운영 8월 1일 글 본문 4문단·상세 border 1px·header shadow 0, 390px 가로 넘침 0·오류/경고 0 | 기존 본문 사실 분량은 불변, 향후 생성분부터 170자 최소 게이트 적용 |
 
 ## 현재 상태
 
