@@ -31,13 +31,13 @@ export const RSS_SOURCE_REGISTRY: readonly SourceRegistryEntry[] = Object.freeze
     accessReviewedAt: "2026-08-12T00:00:00+09:00",
     policyReferenceUrls: [MSIT_RSS_GUIDE],
     requestPolicy: {
-      timeoutMs: 10_000,
+      timeoutMs: 15_000,
       minIntervalMs: 86_400_000,
       maxResponseBytes: 1_500_000,
       maxItemsPerRun: 50,
       maxRedirects: 3,
     },
     notes:
-      "과기정통부 공식 보도자료 RSS입니다. title, link, pubDate와 짧은 description만 수집하고 원문·첨부파일은 저장하지 않습니다.",
+      "과기정통부 공식 보도자료 RSS입니다. title, link, pubDate와 짧은 description만 수집하고 원문·첨부파일은 저장하지 않습니다. 2026-08-13 실측 9.83초 응답에 유한 여유를 두어 전체 제한을 15초로 고정합니다.",
   }),
 ]);

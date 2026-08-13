@@ -6,6 +6,9 @@ import {
   MemoryPipelineWorkspaceRepository,
 } from "../src/repositories";
 import { MemoryArticleRepository } from "../src/repositories/article-memory.repository";
+import { collectRssSource } from "../src/pipeline/collectors";
+import { createSupabaseSourceAttemptRpcDataSource } from "../src/db/supabase/source-attempt.data-source";
+import { SupabaseSourceAttemptRepository } from "../src/repositories/supabase-source-attempt.repository";
 import {
   createGeminiGeneration,
   GEMINI_FREE_MODEL_CHAIN,
@@ -28,6 +31,25 @@ const generationBudget = {
   maxEstimatedCostUsd: 0.1,
   maxCallSeconds: 300,
 } as const;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+if (!supabaseUrl || !supabaseSecretKey) {
+  console.error(
+    JSON.stringify({
+      event: "memory_daily_configuration_blocked",
+      code: "SOURCE_INTERVAL_STORE_NOT_CONFIGURED",
+      message:
+        "Supabase Secret Key가 없어 출처별 호출 간격을 보장할 수 없습니다.",
+    }),
+  );
+  process.exit(1);
+}
+const sourceAttemptRepository = new SupabaseSourceAttemptRepository(
+  createSupabaseSourceAttemptRpcDataSource({
+    projectUrl: supabaseUrl,
+    secretKey: supabaseSecretKey,
+  }),
+);
 
 const result = await runMemoryDailyPipeline({
   store: new MemoryDailyRunRepository(),
@@ -42,6 +64,31 @@ const result = await runMemoryDailyPipeline({
   },
   ownerId: "manual-memory-daily",
   collectionConfigurationId: "official-rss-live-v1",
+  collectSource: async (source, signal) => {
+    const reservation = await sourceAttemptRepository.reserve({
+      sourceId: source.sourceId,
+      minIntervalMs: source.requestPolicy.minIntervalMs,
+    });
+    if (reservation.status === "too_soon") {
+      const now = new Date().toISOString();
+      return {
+        sourceId: source.sourceId,
+        status: "failed",
+        startedAt: now,
+        finishedAt: now,
+        items: [],
+        issues: [
+          {
+            code: "SOURCE_UNAVAILABLE",
+            message: "수집원 최소 호출 간격이 아직 지나지 않았습니다.",
+            retryable: false,
+            itemIndex: null,
+          },
+        ],
+      };
+    }
+    return collectRssSource(source, { signal });
+  },
   generation: gemini
     ? {
         configurationId: `google-free:${GEMINI_FREE_MODEL_CHAIN.join(",")}`,

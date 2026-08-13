@@ -11,6 +11,7 @@ import {
   type ModelUsage,
 } from "../../contracts";
 import { GENERATED_POST_PROMPT_VERSION } from "../../prompts/generated-post-v2";
+import { assertEvidenceSafeForModel } from "../../prompts/prompt-data-safety";
 import { GenerationProviderError } from "./errors";
 import type {
   GeneratedPostGenerationRequest,
@@ -88,6 +89,14 @@ export function validateGenerationRequest(
     !validRevisionReasons
   ) {
     throw new GenerationProviderError("INVALID_GENERATION_INPUT");
+  }
+
+  try {
+    assertEvidenceSafeForModel(evidenceItems);
+  } catch (error) {
+    throw new GenerationProviderError("INVALID_GENERATION_INPUT", {
+      cause: error,
+    });
   }
 
   if (request.abortSignal?.aborted) {

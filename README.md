@@ -371,15 +371,17 @@ npm run build
 
 #### 현재 수집원과 이용 정책
 
-- 활성 수집원은 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94` 한 곳입니다. 공식 RSS 안내를 확인했고 최소 간격 정책값은 24시간, 한 번에 최대 50건, 10초 제한, 1.5MB 응답 상한입니다. 현재 인메모리 CLI는 프로세스 간 실행 간격을 강제하지 않습니다.
+- 활성 수집원은 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94` 한 곳입니다. 공식 RSS 안내를 확인했고 최소 간격은 24시간, 한 번에 최대 50건, 15초 제한, 1.5MB 응답 상한입니다. 2026-08-13 실제 1회 측정에서 첫 바이트 6.824초, 전체 9.828초, 700,119바이트로 확인돼 기존 10초 제한을 유한하게 조정했습니다. DNS·응답 시작·본문 읽기 timeout을 구분하고 멈춘 본문 reader를 직접 취소합니다.
 - 피드의 `title`, `link`, `pubDate`, 짧은 `description`만 읽습니다. 실제 피드의 매우 긴 `content:encoded`, HWP 변환 JSON, 이미지, 첨부파일과 상세 `/bbs` 본문은 저장하거나 추가 크롤링하지 않습니다.
 - 날짜만 제공하는 `YYYY.MM.DD` 값은 KST 자정 시각으로 변환하고 `publishedAtPrecision: "date"`로 원래 정밀도를 보존합니다.
-- 에듀프레스 RSS는 교육 전문 독립 보도라는 장점이 있지만 재가공 이용 허락이 명확하지 않아 `needs_review` 상태로 판단했고 코드의 활성 등록부에는 넣지 않았습니다.
+- 2026-08-13 재조사에서 교육플러스 전체 RSS와 AI타임스 교육 RSS가 정상 응답했지만 각각 `All rights reserved`·무단전재 금지 또는 사전승낙 없는 복제·전송 금지 조건이라 `needs_review`로 유지했습니다. 에듀프레스는 GPTBot 전면 차단과 `All rights reserved`를 확인해 초기 제외했습니다. 공개 RSS와 robots 허용은 AI 재가공 라이선스가 아니므로 세 매체 모두 서면허락 전 운영 등록부·LLM 입력·공개 재가공에 넣지 않습니다.
 - 정책브리핑 RSS는 2026년 7월 1일 공식 중단됐고, 교육부와 KERIS는 검증 가능한 공개 RSS/API를 찾지 못해 HTML 크롤링으로 우회하지 않았습니다.
 - 과기정통부 공공데이터 OpenAPI는 무료·자동 승인 후보지만 키가 필요하므로 현재 연결하지 않았습니다. 추후 사용하면 RSS와 같은 기관으로 묶어 독립 출처 두 개로 계산하지 않습니다.
 - 공식 발표 한 건은 발표일·대상 같은 직접 사실의 후보일 뿐, 효과·현장 반응·안전성·전망을 단독으로 뒷받침하지 않습니다. 독립 출처가 없으면 게시를 보류합니다.
 
 구현된 안전 경계는 HTTPS와 자격 증명 없는 URL, DNS의 IPv4·IPv6 로컬·사설·예약 대역 차단, 같은 origin으로 제한된 리다이렉트와 홉별 재검증, 응답 형식·크기·시간 제한, DTD·외부 엔티티 거부, 항목별 오류 격리입니다. 수집기가 예외를 던지거나 잘못된 source 결과를 반환해도 해당 출처의 실패로 바꾸고 다른 출처 처리를 계속합니다. DNS 검사와 실제 연결 사이의 재해석 가능성은 남아 있어 운영 전에는 주소 고정 전송 계층으로 한 번 더 강화합니다.
+
+Supabase `006` migration은 DB에 고정한 MSIT 24시간 정책과 호출자 값을 대조하고, 출처별 실제 요청 직전에 PostgreSQL 서버 시각으로 `last_attempt_at`을 원자 예약합니다. 실패한 요청도 간격을 소비하며 이른 중복 요청은 `TOO_SOON`으로 차단합니다. 메모리 운영 CLI도 이 예약을 통과한 뒤에만 RSS를 호출하며 Supabase Secret Key나 적용된 006 RPC가 없으면 수집 전에 중단합니다. RPC·저장소·CLI 연결 코드는 완료했지만 migration은 아직 원격 미적용입니다. 보도자료 재작성본을 독립 출처로 잘못 세지 않도록 기사 단위 upstream provenance를 확인할 수 없는 신규 언론 소스는 향후에도 `supporting`으로만 시작합니다.
 
 ### M3 — 선정·작성·품질 게이트
 
@@ -507,6 +509,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M7-RUNNER-AUTHORITY-001 | 최민재(루트) | 최민재 | 일일 단계에 비로그 lease token·fence·journal revision을 전달하고 결정론적 validate를 모델 비용 단계에서 제외 | `src/pipeline/orchestrator/run-daily-pipeline.ts`, `tests/integration/**`, `src/db/supabase/configured-write.repositories.ts` | stale lease 컨텍스트 회귀 포함 전체 검사 통과 | Supabase 운영 stage 조립 |
 | 2026-08-13 | M7-SUPABASE-LOCKED-CLOCK-001 | 최민재(루트) | 김도윤·최민재 | 적용된 001을 수정하지 않고 acquire/checkpoint/finish/publish가 daily row lock 뒤 서버 시각을 읽도록 네 RPC를 교체하는 forward migration 추가 | `supabase/migrations/202608130004_*`, `tests/backend/supabase-locked-server-clock-schema.test.ts` | 001과 clock 위치 외 exact 비교 10개·backend/typecheck/lint 통과 | 적용 전 실제 PostgreSQL 통합 컴파일·lock wait 회귀 |
 | 2026-08-13 | M8-GEMINI-001 | 최민재(루트) | 박서연·최민재 | Google Gemini 기사 생성·외부 의미 평가와 최신 Flash→Flash-Lite 제한적 자동 강등, 물리 호출별 감사·예산 경계 추가 | `src/lib/ai/**`, `src/pipeline/{generation,orchestrator}/**`, `src/contracts/generation.ts`, `supabase/migrations/202608130005_*`, `.env.example`, `package*.json`, `tests/**` | 실제 키 모델 목록 조회와 Gemini 3.6 최소 생성 성공, fallback 회귀·전체 검사 | 무료 등급 정책 정기 확인, 영속 invocation intent/fence ledger |
+| 2026-08-13 | M9-COLLECT-SAFETY-001 | 최민재(루트) | 김도윤·박서연·최민재 | MSIT 응답 실측에 따른 15초 제한과 단계별 timeout, 출처별 24시간 서버 예약 RPC·CLI 연결, Gemini 전송 전 학생 식별정보·전체 입력량 차단 및 독립 출처 권리 재조사 | `src/pipeline/collectors/**`, `src/prompts/**`, `src/pipeline/generation/generation-support.ts`, `src/{db,repositories}/**`, `scripts/run-memory-daily-pipeline.ts`, `supabase/migrations/202608130006_*`, `tests/**`, `README.md` | 실제 MSIT 요청 1회, 수집·개인정보·간격 예약 회귀와 전체 검사 | 006 원격 적용, 독립 언론 서면허락, upstream provenance |
 
 ## 현재 상태
 
@@ -520,12 +523,12 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - Supabase: 기존 프로젝트에는 001 core migration만 적용돼 private schema·공개 투영·RLS·기본 일일 실행/발행 RPC가 존재합니다. URL·publishable key는 `.env.local`에만 저장했고 공개 조회 `200 []`, private 테이블 `404`, 서버 전용 RPC `401`, 강제 RLS 활성화를 확인했습니다. 002 workspace, 003 content persistence, 004 locked clock은 아직 적용하지 않았습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS 1개에서 안전한 메타데이터 수집, 정규화, 중복 제거, 인메모리 멱등 저장, 후보 점수·근거 후보 생성까지 연결
-- 후보 점수와 생성 품질 게이트: 한국어 신호, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 사용자의 무료 등급 데이터 사용 확인에 따라 로컬 Gemini opt-in을 활성화했습니다. Gemini 3.6 최소 호출은 성공했지만 2026-08-13 첫 `daily:memory` 실행은 collect 단계 `COLLECTION_TIMEOUT`으로 종료되어 모델 호출·비용·게시 모두 0건이었고, 출처 간격 정책 때문에 즉시 재호출하지 않았습니다.
+- 후보 점수와 생성 품질 게이트: 한국어 신호, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 사용자의 무료 등급 데이터 사용 확인에 따라 로컬 Gemini opt-in을 활성화했습니다. Gemini 3.6 최소 호출은 성공했고, 학생·보호자 식별 패턴이나 전체 근거 6,000 grapheme 초과 시 모델 호출 전에 보류합니다. 첫 `daily:memory` timeout 원인은 수정했지만 24시간 정책 때문에 같은 날 원격 재실행하지 않았습니다.
 - 일일 자동 실행: KST 날짜별 메모리 lease·fence·저널과 설정·부모 계보를 가진 artifact workspace를 연결했습니다. 실제 RSS 수집→결정론적 주제 선정→복합 생성·품질 단계를 재개할 수 있고, 기본 단일 출처에서는 모델 0회로 정상 보류합니다. Supabase 서버 저장소는 구현됐지만 운영 stage factory에는 아직 조립하지 않았으며 dry-run과 실제 RSS 메모리 CLI 모두 외부 게시를 하지 않습니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 40개 파일 326개 테스트 통과, 프로덕션 빌드 및 npm audit 취약점 0을 확인했습니다. 초기 002·003 SQL은 원격 PostgreSQL 트랜잭션에서 컴파일 후 rollback했고 신규 RPC·컬럼 0개를 확인했습니다. 최종 003~005를 포함한 통합 컴파일과 lock-wait 시험은 적용 전 게이트로 남았습니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 43개 파일 340개 테스트 통과, 프로덕션 빌드 및 npm audit 취약점 0을 확인했습니다. 초기 002·003 SQL은 원격 PostgreSQL 트랜잭션에서 컴파일 후 rollback했고 신규 RPC·컬럼 0개를 확인했습니다. 최종 003~006을 포함한 통합 컴파일과 lock-wait 시험은 적용 전 게이트로 남았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: Supabase pipeline workspace·content persistence·publisher 저장소는 구현됐지만 secret key와 운영 stage factory가 없어 실제 쓰기 성공 경로를 호출하지 않았습니다. 002~005 migration도 아직 원격에 적용하지 않았습니다. `publish_post` 응답 유실 뒤 commit을 재확인하는 receipt 조정 RPC와 모델 invocation intent·fence ledger가 없으므로 실제 예약 발행은 계속 비활성입니다. Gemini는 메모리 실행에 연결했지만 현재 공식 RSS 한 곳만으로는 독립 근거 기준을 통과하지 않아 실제 기사 생성 대신 0-call 보류됩니다. 같은 콘텐츠 지문의 과거 기사와 새 URL을 연결하는 canonical survivor 정책, DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. 독립 보도·Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
+- 알려진 제한: Supabase pipeline workspace·content persistence·publisher 저장소는 구현됐지만 secret key와 운영 stage factory가 없어 실제 쓰기 성공 경로를 호출하지 않았습니다. 002~006 migration도 아직 원격에 적용하지 않았습니다. `publish_post` 응답 유실 뒤 commit을 재확인하는 receipt 조정 RPC와 모델 invocation intent·fence ledger가 없으므로 실제 예약 발행은 계속 비활성입니다. Gemini는 메모리 실행에 연결했지만 현재 공식 RSS 한 곳만으로는 독립 근거 기준을 통과하지 않아 실제 기사 생성 대신 0-call 보류됩니다. 공개 근거만으로 AI 재가공을 허용하는 독립 언론 출처도 아직 없으며 교육플러스에 서면허락을 받는 것이 우선입니다. 같은 콘텐츠 지문의 과거 기사와 새 URL을 연결하는 canonical survivor 정책, DNS 사전 검사와 실제 연결 사이의 재바인딩 방어, 제목 휴리스틱을 넘는 사건 동일성 판정도 운영 전 강화해야 합니다. Cron·알림은 미연결이고 공개 데이터도 아직 0건입니다. 전용 axe·색 대비·완전한 키보드 자동 검사도 미실행입니다.
 - 생성 예산은 한 실행 저널 안에서 성공·실패 모델 사용량을 누적하고 미가격 호출을 즉시 차단하지만 실제 지출을 호출 전에 막는 hard cap은 아닙니다. 운영 연결 전에 프롬프트 토큰·최대 출력 비용 사전 예약, 날짜별 영속 ledger와 공급자 측 상한이 필요합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 

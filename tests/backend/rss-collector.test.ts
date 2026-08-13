@@ -67,6 +67,7 @@ describe("RSS 수집원 등록부", () => {
       accessStatus: "allowed",
     });
     expect(source.requestPolicy.minIntervalMs).toBe(86_400_000);
+    expect(source.requestPolicy.timeoutMs).toBe(15_000);
     expect(RSS_COLLECTOR_USER_AGENT).toContain("AI-Education-Today");
   });
 });
@@ -203,6 +204,7 @@ describe("안전한 RSS 수집", () => {
 
     expect(outcome.issues[0]).toMatchObject({
       code: "COLLECTION_TIMEOUT",
+      message: "RSS 수집원 응답 시작 제한 시간을 초과했습니다.",
       retryable: true,
     });
   });
@@ -221,9 +223,39 @@ describe("안전한 RSS 수집", () => {
 
     expect(outcome.issues[0]).toMatchObject({
       code: "COLLECTION_TIMEOUT",
+      message: "RSS 수집원 DNS 확인 제한 시간을 초과했습니다.",
       retryable: true,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("본문 스트림이 멈추면 응답 시작과 구분된 제한 시간 실패를 반환한다", async () => {
+    vi.useFakeTimers();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("<?xml version=\"1.0\"?><rss>"));
+      },
+    });
+    const fetchMock = vi.fn(async () => {
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "application/rss+xml" },
+      });
+    }) as unknown as typeof fetch;
+
+    const outcomePromise = collectRssSource(source, {
+      fetch: fetchMock,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+    await vi.advanceTimersByTimeAsync(source.requestPolicy.timeoutMs);
+    const outcome = await outcomePromise;
+
+    expect(outcome.issues[0]).toMatchObject({
+      code: "COLLECTION_TIMEOUT",
+      message: "RSS 수집원 본문 읽기 제한 시간을 초과했습니다.",
+      retryable: true,
+    });
   });
 
   it("사설 DNS와 위험한 리다이렉트를 요청 전에 차단한다", async () => {

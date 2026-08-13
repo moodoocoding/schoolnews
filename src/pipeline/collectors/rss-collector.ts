@@ -51,6 +51,7 @@ function asIssue(error: unknown): CollectionIssue {
 async function readLimitedText(
   response: Response,
   maximumBytes: number,
+  signal: AbortSignal,
 ): Promise<string> {
   const declaredLength = response.headers.get("content-length");
   if (
@@ -71,9 +72,29 @@ async function readLimitedText(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
+  let aborted = signal.aborted;
+  const handleAbort = () => {
+    aborted = true;
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener("abort", handleAbort, { once: true });
   try {
+    if (aborted) {
+      throw new CollectorError(
+        "COLLECTION_TIMEOUT",
+        "RSS 수집원 본문 읽기 제한 시간을 초과했습니다.",
+        { retryable: true },
+      );
+    }
     while (true) {
       const { done, value } = await reader.read();
+      if (aborted) {
+        throw new CollectorError(
+          "COLLECTION_TIMEOUT",
+          "RSS 수집원 본문 읽기 제한 시간을 초과했습니다.",
+          { retryable: true },
+        );
+      }
       if (done) {
         break;
       }
@@ -88,6 +109,7 @@ async function readLimitedText(
       chunks.push(value);
     }
   } finally {
+    signal.removeEventListener("abort", handleAbort);
     reader.releaseLock();
   }
 
@@ -139,7 +161,7 @@ async function fetchRssXml(
       if (signal.aborted) {
         throw new CollectorError(
           "COLLECTION_TIMEOUT",
-          "RSS 수집 제한 시간을 초과했습니다.",
+          "RSS 수집원 응답 시작 제한 시간을 초과했습니다.",
           { cause: error, retryable: true },
         );
       }
@@ -192,7 +214,11 @@ async function fetchRssXml(
     try {
       return {
         baseUrl: safeUrl.toString(),
-        xml: await readLimitedText(response, source.requestPolicy.maxResponseBytes),
+        xml: await readLimitedText(
+          response,
+          source.requestPolicy.maxResponseBytes,
+          signal,
+        ),
       };
     } catch (error) {
       if (error instanceof CollectorError) {
@@ -201,7 +227,7 @@ async function fetchRssXml(
       if (signal.aborted) {
         throw new CollectorError(
           "COLLECTION_TIMEOUT",
-          "RSS 수집 제한 시간을 초과했습니다.",
+          "RSS 수집원 본문 읽기 제한 시간을 초과했습니다.",
           { cause: error, retryable: true },
         );
       }

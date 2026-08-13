@@ -193,7 +193,7 @@ export async function assertSafeRequestUrl(
           reject(
             new CollectorError(
               "COLLECTION_TIMEOUT",
-              "RSS 수집 제한 시간을 초과했습니다.",
+              "RSS 수집원 DNS 확인 제한 시간을 초과했습니다.",
               { retryable: true },
             ),
           );

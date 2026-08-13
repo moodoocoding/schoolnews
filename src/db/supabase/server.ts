@@ -6,3 +6,4 @@ export * from "./content-persistence.data-source";
 export * from "./daily-run.data-source";
 export * from "./pipeline-workspace.data-source";
 export * from "./publisher.data-source";
+export * from "./source-attempt.data-source";

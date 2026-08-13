@@ -101,6 +101,57 @@ describe("generated post prompt v2", () => {
       }),
     ).toThrow();
   });
+
+  it("학생 식별 정보와 과도한 전체 근거를 모델 호출 전에 거부한다", () => {
+    const personal = validEvidenceItems();
+    personal[0].passage = "학생 이름: 김민수, 3학년 2반 7번의 사례";
+    expect(() =>
+      buildGeneratedPostPrompt({ purpose: "draft", evidenceItems: personal }),
+    ).toThrow("식별 가능 정보");
+
+    const schoolIdentity = validEvidenceItems();
+    schoolIdentity[0].title = "서울샘초 3학년 김민수 학생 사례";
+    expect(() =>
+      buildGeneratedPostPrompt({
+        purpose: "draft",
+        evidenceItems: schoolIdentity,
+      }),
+    ).toThrow("식별 가능 정보");
+
+    const honorificIdentity = validEvidenceItems();
+    honorificIdentity[0].passage =
+      "서울샘초 3학년 김민수 군은 디지털 수업에 참여했다.";
+    expect(() =>
+      buildGeneratedPostPrompt({
+        purpose: "draft",
+        evidenceItems: honorificIdentity,
+      }),
+    ).toThrow("식별 가능 정보");
+
+    const parentheticalIdentity = validEvidenceItems();
+    parentheticalIdentity[0].passage =
+      "김민수(10·서울샘초)는 디지털 수업에 참여했다.";
+    expect(() =>
+      buildGeneratedPostPrompt({
+        purpose: "draft",
+        evidenceItems: parentheticalIdentity,
+      }),
+    ).toThrow("식별 가능 정보");
+
+    const oversized = Array.from({ length: 4 }, (_, index) => {
+      const item = validEvidenceItems()[0];
+      return {
+        ...item,
+        evidenceId: `evidence-long-${index}`,
+        passageId: `passage-long-${index}`,
+        passageHash: `${index}`.repeat(64),
+        passage: "가".repeat(1_900),
+      };
+    });
+    expect(() =>
+      buildGeneratedPostPrompt({ purpose: "draft", evidenceItems: oversized }),
+    ).toThrow("전체 길이 한도");
+  });
 });
 
 describe("AiSdkGeneratedPostProvider", () => {

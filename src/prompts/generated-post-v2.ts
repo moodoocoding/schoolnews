@@ -6,6 +6,7 @@ import {
   type EvidenceItem,
   type GenerationPurpose,
 } from "../contracts";
+import { assertEvidenceSafeForModel } from "./prompt-data-safety";
 
 export const GENERATED_POST_PROMPT_VERSION = "generated-post-v2";
 
@@ -77,6 +78,7 @@ export function buildGeneratedPostPrompt(
 ): string {
   const purpose = generationPurposeSchema.parse(input.purpose);
   const evidenceItems = evidenceArraySchema.parse(input.evidenceItems);
+  assertEvidenceSafeForModel(evidenceItems);
   const revisionReasons =
     purpose === "revision"
       ? revisionReasonsSchema.parse(input.revisionReasons)
@@ -96,12 +98,15 @@ export function buildGeneratedPostPrompt(
       sourceRole: item.sourceRole,
       sourceType: item.sourceType,
       authority: item.authority,
-      sourceName: item.sourceName,
-      sourceTitle: item.title,
+      sourceName: redactSensitiveContactDetails(item.sourceName),
+      sourceTitle: redactSensitiveContactDetails(item.title),
       publishedAt: item.publishedAt,
       publishedAtPrecision: item.publishedAtPrecision,
       passage: redactSensitiveContactDetails(item.passage),
-      locator: item.locator,
+      locator:
+        item.locator === null
+          ? null
+          : redactSensitiveContactDetails(item.locator),
     })),
   };
 

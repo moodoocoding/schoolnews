@@ -95,3 +95,13 @@ export type {
   PublishedPostListOptions,
   PublishedPostRepository,
 } from "./published-post.repository";
+export {
+  SupabaseSourceAttemptError,
+  SupabaseSourceAttemptRepository,
+  SUPABASE_SOURCE_ATTEMPT_RPC_NAME,
+} from "./supabase-source-attempt.repository";
+export type {
+  SourceAttemptReservation,
+  SupabaseSourceAttemptRpcDataSource,
+  SupabaseSourceAttemptRpcResult,
+} from "./supabase-source-attempt.repository";
