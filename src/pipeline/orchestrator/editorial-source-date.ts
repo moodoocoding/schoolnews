@@ -32,7 +32,7 @@ export function getEditorialWindowKst(input: {
 }
 
 /**
- * The 05:00 KST run only evaluates completed calendar days. Normal runs use
+ * The 09:00 KST run only evaluates completed calendar days. Normal runs use
  * yesterday; the seven-day deadline compares all completed days since the
  * previous week. Evidence must stay attached to an article in the same window.
  */
