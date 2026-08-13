@@ -14,6 +14,7 @@ import {
 } from "../../src/pipeline/orchestrator";
 import {
   SupabasePublisherError,
+  SupabasePipelineWorkspaceRepositoryError,
   createSupabasePipelineArtifactDescriptor,
   type SupabasePipelineWorkspaceArtifact,
   type SupabasePipelineWorkspaceStoredArtifact,
@@ -65,6 +66,7 @@ class FakePublicationWorkspace {
     SupabasePipelineWorkspaceStoredArtifact
   >();
   readonly putAuthorities: unknown[] = [];
+  ambiguousValidationWrite = false;
 
   constructor() {
     const scoreReference = this.reference(
@@ -128,6 +130,21 @@ class FakePublicationWorkspace {
     return structuredClone(this.artifacts.get(input.stage) ?? null);
   }
 
+  async getExactArtifactForStage(input: {
+    runId: string;
+    stage: "validate";
+    configurationFingerprint: string;
+    parentOutputReferences: readonly string[];
+    artifact: SupabasePipelineWorkspaceArtifact;
+  }) {
+    const expected = createSupabasePipelineArtifactDescriptor(input);
+    const stored = this.artifacts.get(input.stage);
+    if (!stored) return null;
+    return stored.outputReference === expected.outputReference
+      ? structuredClone(stored)
+      : null;
+  }
+
   async getArtifact(reference: string) {
     const found = [...this.artifacts.values()].find(
       (artifact) => artifact.outputReference === reference,
@@ -166,6 +183,9 @@ class FakePublicationWorkspace {
       structuredClone(input.artifact),
       descriptor.outputReference,
     );
+    if (this.ambiguousValidationWrite) {
+      throw new SupabasePipelineWorkspaceRepositoryError("DATA_API_ERROR");
+    }
     return {
       outputReference: descriptor.outputReference,
       payloadFingerprint: descriptor.payloadFingerprint,
@@ -212,6 +232,32 @@ async function validateAndGetPost(
 }
 
 describe("Supabase publication stage integration", () => {
+  it("모호한 validate 응답은 exact publication artifact로만 성공 조정한다", async () => {
+    const workspace = new FakePublicationWorkspace();
+    workspace.ambiguousValidationWrite = true;
+    const [validate] = createSupabasePublicationStages({
+      workspace,
+      publisher: {
+        publish: async () => {
+          throw new Error("not called");
+        },
+      },
+      publishReceipt: { get: async () => null },
+    });
+
+    const result = await validate.execute(context("validate"));
+
+    expect(result.outcome).toBe("succeeded");
+    expect(workspace.putAuthorities).toHaveLength(1);
+    expect(
+      await validate.validateOutputReference(
+        result.outputReference,
+        new AbortController().signal,
+        { runId: "run-20260813", runDate: "2026-08-13", stage: "validate" },
+      ),
+    ).toBe(true);
+  });
+
   it("validated generation을 publication으로 변환하고 context authority를 그대로 전달한다", async () => {
     const workspace = new FakePublicationWorkspace();
     const [validate] = createSupabasePublicationStages({
@@ -248,7 +294,7 @@ describe("Supabase publication stage integration", () => {
     );
   });
 
-  it("publish는 한 번만 호출하고 exact receipt로 출력 참조를 검증한다", async () => {
+  it("publish는 한 번만 호출하고 exact 성공 응답을 즉시 검증에 재사용한다", async () => {
     const workspace = new FakePublicationWorkspace();
     const publishInputs: Array<Record<string, unknown>> = [];
     let receiptInput: Record<string, unknown> | null = null;
@@ -288,11 +334,7 @@ describe("Supabase publication stage integration", () => {
         { runId: "run-20260813", runDate: "2026-08-13", stage: "publish" },
       ),
     ).toBe(true);
-    expect(receiptInput).toMatchObject({
-      runDate: "2026-08-13",
-      runId: "run-20260813",
-      validationOutputReference: result.outputReference,
-    });
+    expect(receiptInput).toBeNull();
   });
 
   it("모호한 publish 응답은 재호출 없이 008 receipt 한 번으로만 조정한다", async () => {

@@ -18,8 +18,10 @@ import {
   type SupabasePublicationPostMapper,
 } from "../../src/repositories/supabase-pipeline-workspace.repository";
 import {
+  evidenceItemsFixture,
   generatedPostFixture,
   publishedPostDetailFixture,
+  topicCandidateFixture,
 } from "../fixtures/contracts";
 
 const RUN_ID = "daily-20260813";
@@ -115,7 +117,10 @@ function generationResult(): PostGenerationResult {
   };
 }
 
-async function seedRows(options: { includeGeneration?: boolean } = {}): Promise<{
+async function seedRows(options: {
+  includeGeneration?: boolean;
+  scoreOutcome?: "eligible" | "none";
+} = {}): Promise<{
   rows: ArtifactRow[];
   collectReference: string;
   scoreReference: string;
@@ -136,7 +141,14 @@ async function seedRows(options: { includeGeneration?: boolean } = {}): Promise<
     parentOutputReferences: [collect.outputReference],
     artifact: {
       kind: "topic_selection",
-      value: { outcome: "none", candidate: null, evidenceItems: [] },
+      value:
+        options.scoreOutcome === "eligible"
+          ? {
+              outcome: "eligible",
+              candidate: topicCandidateFixture,
+              evidenceItems: evidenceItemsFixture,
+            }
+          : { outcome: "none", candidate: null, evidenceItems: [] },
     },
   });
   const references = [collect.outputReference, score.outputReference];
@@ -264,6 +276,157 @@ async function expectWorkspaceError(
 }
 
 describe("SupabasePipelineWorkspaceRepository", () => {
+  it.each(["eligible", "none"] as const)(
+    "ambiguous score %s 쓰기를 exact descriptor로만 복구한다",
+    async (scoreOutcome) => {
+      const seeded = await seedRows({ scoreOutcome });
+      const source = new FakeDataSource(seeded.rows);
+      const workspace = repository(source);
+      const artifact =
+        scoreOutcome === "eligible"
+          ? {
+              kind: "topic_selection" as const,
+              value: {
+                outcome: "eligible" as const,
+                candidate: topicCandidateFixture,
+                evidenceItems: evidenceItemsFixture,
+              },
+            }
+          : {
+              kind: "topic_selection" as const,
+              value: {
+                outcome: "none" as const,
+                candidate: null,
+                evidenceItems: [],
+              },
+            };
+
+      await expect(
+        workspace.getExactArtifactForStage({
+          runId: RUN_ID,
+          stage: "score",
+          configurationFingerprint: CONFIGURATION_FINGERPRINT,
+          parentOutputReferences: [seeded.collectReference],
+          artifact,
+        }),
+      ).resolves.toMatchObject({
+        runId: RUN_ID,
+        stage: "score",
+        kind: "topic_selection",
+        artifact,
+      });
+      expect(source.putRequests).toHaveLength(0);
+      expect(authority).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ambiguous collect 쓰기의 완전 부재는 null로 보존한다", async () => {
+    const source = new FakeDataSource();
+    const workspace = repository(source);
+
+    await expect(
+      workspace.getExactArtifactForStage({
+        runId: RUN_ID,
+        stage: "collect",
+        configurationFingerprint: CONFIGURATION_FINGERPRINT,
+        parentOutputReferences: [],
+        artifact: { kind: "news_ingestion", value: ingestionResult() },
+      }),
+    ).resolves.toBeNull();
+    expect(source.putRequests).toHaveLength(0);
+  });
+
+  it("ambiguous collect 쓰기도 exact descriptor로만 복구한다", async () => {
+    const seeded = await seedRows();
+    const source = new FakeDataSource(seeded.rows);
+    const workspace = repository(source);
+    const artifact = { kind: "news_ingestion" as const, value: ingestionResult() };
+
+    await expect(
+      workspace.getExactArtifactForStage({
+        runId: RUN_ID,
+        stage: "collect",
+        configurationFingerprint: CONFIGURATION_FINGERPRINT,
+        parentOutputReferences: [],
+        artifact,
+      }),
+    ).resolves.toMatchObject({
+      runId: RUN_ID,
+      stage: "collect",
+      kind: "news_ingestion",
+      artifact,
+    });
+    expect(source.putRequests).toHaveLength(0);
+    expect(authority).not.toHaveBeenCalled();
+  });
+
+  it.each(["payload", "configuration", "parents"] as const)(
+    "ambiguous score의 %s mismatch를 성공으로 오인하지 않는다",
+    async (mismatch) => {
+      const seeded = await seedRows();
+      const source = new FakeDataSource(seeded.rows);
+      const workspace = repository(source);
+      const expected = {
+        runId: RUN_ID,
+        stage: "score" as const,
+        configurationFingerprint:
+          mismatch === "configuration"
+            ? "d".repeat(64)
+            : CONFIGURATION_FINGERPRINT,
+        parentOutputReferences:
+          mismatch === "parents"
+            ? [
+                `${seeded.collectReference.slice(0, -1)}${
+                  seeded.collectReference.endsWith("a") ? "b" : "a"
+                }`,
+              ]
+            : [seeded.collectReference],
+        artifact: {
+          kind: "topic_selection" as const,
+          value:
+            mismatch === "payload"
+              ? {
+                  outcome: "eligible" as const,
+                  candidate: topicCandidateFixture,
+                  evidenceItems: evidenceItemsFixture,
+                }
+              : {
+                  outcome: "none" as const,
+                  candidate: null,
+                  evidenceItems: [],
+                },
+        },
+      };
+
+      await expect(
+        workspace.getExactArtifactForStage(expected),
+      ).rejects.toMatchObject({ code: "OUTPUT_CONFLICT" });
+      expect(source.putRequests).toHaveLength(0);
+    },
+  );
+
+  it("ambiguous reconciliation의 unknown read 오류를 성공으로 바꾸지 않는다", async () => {
+    const seeded = await seedRows();
+    const source = new FakeDataSource(seeded.rows);
+    source.nextGetResult = {
+      data: null,
+      error: { code: "XX000", message: "secret database detail" },
+    };
+
+    await expect(
+      repository(source).getExactArtifactForStage({
+        runId: RUN_ID,
+        stage: "score",
+        configurationFingerprint: CONFIGURATION_FINGERPRINT,
+        parentOutputReferences: [seeded.collectReference],
+        artifact: {
+          kind: "topic_selection",
+          value: { outcome: "none", candidate: null, evidenceItems: [] },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "DATA_API_ERROR" });
+  });
+
   it("stage context authority를 closure 없이 exact fenced put에 사용한다", async () => {
     const seeded = await seedRows();
     const source = new FakeDataSource(seeded.rows);

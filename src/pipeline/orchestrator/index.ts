@@ -10,3 +10,4 @@ export * from "./run-post-generation";
 export * from "./run-daily-pipeline";
 export * from "./select-daily-topic";
 export * from "./supabase-publication-integration";
+export * from "./supabase-daily-integration";

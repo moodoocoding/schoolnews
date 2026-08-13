@@ -181,6 +181,19 @@ export class DailyStepError extends Error {
   }
 }
 
+/**
+ * The remote transaction may still commit after its response was lost. The
+ * runner must leave the current lease/journal non-terminal so a later fenced
+ * takeover can reconcile the durable artifact instead of issuing the write
+ * again or permanently closing the run too early.
+ */
+export class DailyStageCommitUncertainError extends Error {
+  constructor(options?: ErrorOptions) {
+    super("DAILY_STAGE_COMMIT_UNCERTAIN", options);
+    this.name = "DailyStageCommitUncertainError";
+  }
+}
+
 const PIPELINE_STAGE_ORDER = new Map(
   pipelineStageSchema.options.map((stage, index) => [stage, index]),
 );
@@ -1217,6 +1230,9 @@ export async function runDailyPipeline(
         await checkpoint(journal);
         break;
       } catch (caught) {
+        if (caught instanceof DailyStageCommitUncertainError) {
+          throw caught;
+        }
         if (caught instanceof DailyRunStoreError) {
           throw caught;
         }

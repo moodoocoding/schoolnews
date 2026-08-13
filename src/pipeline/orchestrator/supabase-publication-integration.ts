@@ -6,6 +6,7 @@ import type {
   QualityResult,
 } from "../../contracts";
 import {
+  SupabasePipelineWorkspaceRepositoryError,
   SupabasePublisherError,
   type SupabasePipelineWorkspaceRepository,
   type SupabasePublishReceiptRepository,
@@ -14,6 +15,7 @@ import {
 import { mapValidatedGenerationToPublishedPost } from "./publication-mapping";
 import {
   DailyStepError,
+  DailyStageCommitUncertainError,
   type DailyStageContext,
   type DailyStageDefinition,
   type DailyStageFingerprintContext,
@@ -33,6 +35,7 @@ const EMPTY_USAGE: GenerationUsage = Object.freeze({
 type PublicationWorkspace = Pick<
   SupabasePipelineWorkspaceRepository,
   | "getArtifactForStage"
+  | "getExactArtifactForStage"
   | "getArtifact"
   | "validateOutputReference"
   | "putArtifactWithAuthority"
@@ -218,6 +221,7 @@ export function createSupabasePublicationStages(
     configurationId: options.configurationId ?? "publication-v1",
   });
   const verifiedReceiptKeys = new Set<string>();
+  const verifiedValidationReferences = new Set<string>();
 
   const validate: DailyStageDefinition = {
     stage: "validate",
@@ -230,31 +234,58 @@ export function createSupabasePublicationStages(
       return fingerprint({ configurationFingerprint, parent: generated.outputReference });
     },
     retryPolicy: {
-      maxAttempts: 1,
+      // Attempt two can only reuse an exact committed validation artifact.
+      maxAttempts: 2,
       initialDelayMs: 0,
       multiplier: 1,
       maxDelayMs: 0,
-      timeoutMs: 15_000,
+      timeoutMs: 60_000,
     },
-    validateOutputReference: (reference, _signal, context) =>
-      reference !== null &&
-      options.workspace.validateOutputReference(reference, {
-        runId: context?.runId,
-        stage: "validate",
-        kind: "publication",
-      }),
+    validateOutputReference: async (reference, _signal, context) => {
+      if (reference === null || context === undefined) return false;
+      if (verifiedValidationReferences.has(reference)) return true;
+      const publication = await publicationForRun(options.workspace, context);
+      const expected = {
+        runId: context.runId,
+        stage: "validate" as const,
+        configurationFingerprint,
+        parentOutputReferences: [publication.generationOutputReference],
+        artifact: {
+          kind: "publication" as const,
+          value: {
+            post: publication.post,
+            qualityResult: publication.qualityResult,
+            generationOutputReference: publication.generationOutputReference,
+          },
+        },
+      };
+      const stored = await options.workspace.getExactArtifactForStage(expected);
+      return stored?.outputReference === reference;
+    },
     execute: async (context) => {
       const publication = await publicationForRun(options.workspace, context);
       const inputFingerprint = fingerprint({
         configurationFingerprint,
         parent: publication.generationOutputReference,
       });
-      const existing = await options.workspace.getArtifactForStage({
+      const writeInput = {
         runId: context.runId,
-        stage: "validate",
-        kind: "publication",
-      });
+        stage: "validate" as const,
+        configurationFingerprint,
+        parentOutputReferences: [publication.generationOutputReference],
+        artifact: {
+          kind: "publication" as const,
+          value: {
+            post: publication.post,
+            qualityResult: publication.qualityResult,
+            generationOutputReference: publication.generationOutputReference,
+          },
+        },
+      };
+      const existing =
+        await options.workspace.getExactArtifactForStage(writeInput);
       if (existing !== null) {
+        verifiedValidationReferences.add(existing.outputReference);
         return {
           outcome: "succeeded",
           inputFingerprint,
@@ -262,23 +293,40 @@ export function createSupabasePublicationStages(
           usage: EMPTY_USAGE,
         };
       }
-      const stored = await options.workspace.putArtifactWithAuthority(
-        {
-          runId: context.runId,
-          stage: "validate",
-          configurationFingerprint,
-          parentOutputReferences: [publication.generationOutputReference],
-          artifact: {
-            kind: "publication",
-            value: {
-              post: publication.post,
-              qualityResult: publication.qualityResult,
-              generationOutputReference: publication.generationOutputReference,
-            },
-          },
-        },
-        authority(context),
-      );
+      let stored;
+      try {
+        stored = await options.workspace.putArtifactWithAuthority(
+          writeInput,
+          authority(context),
+        );
+      } catch (error) {
+        if (
+          !(error instanceof SupabasePipelineWorkspaceRepositoryError) ||
+          error.code !== "DATA_API_ERROR"
+        ) {
+          throw error;
+        }
+        try {
+          const reconciled =
+            await options.workspace.getExactArtifactForStage(writeInput);
+          if (reconciled === null) {
+            throw new DailyStageCommitUncertainError({ cause: error });
+          }
+          stored = {
+            outputReference: reconciled.outputReference,
+            payloadFingerprint: reconciled.payloadFingerprint,
+            created: false,
+          };
+        } catch (reconcileError) {
+          if (reconcileError instanceof DailyStageCommitUncertainError) {
+            throw reconcileError;
+          }
+          throw new DailyStageCommitUncertainError({
+            cause: reconcileError,
+          });
+        }
+      }
+      verifiedValidationReferences.add(stored.outputReference);
       return {
         outcome: "succeeded",
         inputFingerprint,
@@ -367,7 +415,7 @@ export function createSupabasePublicationStages(
       initialDelayMs: 0,
       multiplier: 1,
       maxDelayMs: 0,
-      timeoutMs: 15_000,
+      timeoutMs: 60_000,
     },
     validateOutputReference: async (reference, _signal, context) =>
       context !== undefined &&
@@ -384,7 +432,7 @@ export function createSupabasePublicationStages(
         topicId: publication.topicId,
       });
       try {
-        await options.publisher.publish({
+        const receipt = await options.publisher.publish({
           runDate: context.runDate,
           runId: context.runId,
           leaseToken: context.leaseToken,
@@ -396,6 +444,25 @@ export function createSupabasePublicationStages(
           post: publication.post,
           qualityResult: publication.qualityResult,
         });
+        if (
+          receipt.runDate !== context.runDate ||
+          receipt.runId !== context.runId ||
+          receipt.revisionId !== publication.revisionId ||
+          receipt.validationOutputReference !==
+            publication.validationOutputReference ||
+          !samePublishedContent(publication.post, receipt.post)
+        ) {
+          throw new DailyStepError("PUBLISH_TIMEOUT_AMBIGUOUS", false);
+        }
+        verifiedReceiptKeys.add(
+          fingerprint({
+            runDate: context.runDate,
+            runId: context.runId,
+            revisionId: publication.revisionId,
+            validationOutputReference:
+              publication.validationOutputReference,
+          }),
+        );
       } catch (error) {
         if (!(error instanceof SupabasePublisherError) || !error.ambiguous) {
           throw error;

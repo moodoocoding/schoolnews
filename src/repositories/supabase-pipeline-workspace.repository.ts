@@ -634,6 +634,36 @@ export class SupabasePipelineWorkspaceRepository {
     return this.#validateStoredRow(parsed.data, new Set());
   }
 
+  /**
+   * Reconciles an ambiguous write without retrying it. `null` means no row was
+   * visible; any existing but non-exact row fails closed as OUTPUT_CONFLICT.
+   */
+  async getExactArtifactForStage(
+    expected: Readonly<PutSupabasePipelineWorkspaceArtifactInput>,
+  ): Promise<SupabasePipelineWorkspaceStoredArtifact | null> {
+    const descriptor = createSupabasePipelineArtifactDescriptor(expected);
+    const stored = await this.getArtifactForStage({
+      runId: expected.runId,
+      stage: expected.stage,
+      kind: expected.artifact.kind,
+    });
+    if (stored === null) return null;
+    if (
+      stored.outputReference !== descriptor.outputReference ||
+      stored.payloadFingerprint !== descriptor.payloadFingerprint ||
+      stored.configurationFingerprint !== descriptor.configurationFingerprint ||
+      !sameStrings(
+        stored.parentOutputReferences,
+        descriptor.parentOutputReferences,
+      ) ||
+      JSON.stringify(canonicalize(stored.artifact)) !==
+        JSON.stringify(canonicalize(descriptor.payload))
+    ) {
+      throw new PipelineWorkspaceError("OUTPUT_CONFLICT");
+    }
+    return structuredClone(stored);
+  }
+
   async validateOutputReference(
     outputReference: string | null,
     expected: Readonly<SupabasePipelineWorkspaceReferenceScope> = {},
