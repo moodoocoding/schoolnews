@@ -19,6 +19,7 @@
 .DS_Store
 *.log
 /.firebase
+supabase/.temp/
 /.credentials
 firebase-debug.log*
 firestore-debug.log*
