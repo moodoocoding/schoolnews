@@ -107,6 +107,7 @@ export type SupabasePipelineWorkspaceWriteAuthorityProvider = (
 /** Builds the exact public projection allowed for a validated generation. */
 export type SupabasePublicationPostMapper = (
   input: Readonly<{
+    runDate: string;
     runId: string;
     generationOutputReference: string;
     generatedPost: GeneratedPost;
@@ -156,6 +157,7 @@ const publicationArtifactSchema = z
 
 const rowSchema = z
   .object({
+    runDate: publicationDateKstSchema,
     runId: identifierSchema,
     stage: pipelineStageSchema,
     kind: artifactKindSchema,
@@ -245,6 +247,15 @@ function sha256(value: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(canonicalize(value)), "utf8")
     .digest("hex");
+}
+
+/**
+ * Computes the canonical payload fingerprint used by every Supabase pipeline
+ * persistence boundary. Keeping this in one place prevents domain RPC callers
+ * from deriving a different identity for the same immutable artifact.
+ */
+export function fingerprintSupabasePipelineArtifactPayload(value: unknown): string {
+  return sha256(value);
 }
 
 function parseReference(outputReference: string): ParsedReference {
@@ -356,7 +367,7 @@ export function createSupabasePipelineArtifactDescriptor(input: Readonly<{
   }
 
   const payload = structuredClone(input.artifact);
-  const payloadFingerprint = sha256(payload);
+  const payloadFingerprint = fingerprintSupabasePipelineArtifactPayload(payload);
   const outputFingerprint = sha256({
     configurationFingerprint,
     kind,
@@ -512,6 +523,7 @@ export class SupabasePipelineWorkspaceRepository {
     }
 
     const artifact = await this.#validateCandidate({
+      runDate: authority.runDate,
       runId,
       stage,
       configurationFingerprint,
@@ -548,6 +560,7 @@ export class SupabasePipelineWorkspaceRepository {
       throw new SupabasePipelineWorkspaceRepositoryError("INVALID_RESPONSE");
     }
     this.#validateRow(parsed.data.artifact, {
+      runDate: authority.runDate,
       runId,
       stage,
       kind: artifact.kind,
@@ -678,7 +691,9 @@ export class SupabasePipelineWorkspaceRepository {
   }
 
   async #validateCandidate(
-    input: Readonly<PutSupabasePipelineWorkspaceArtifactInput>,
+    input: Readonly<PutSupabasePipelineWorkspaceArtifactInput> & {
+      runDate: string;
+    },
   ): Promise<SupabasePipelineWorkspaceArtifact> {
     if (input.artifact.kind === "publication") {
       const publication = parsePublication(input.artifact);
@@ -719,6 +734,7 @@ export class SupabasePipelineWorkspaceRepository {
       try {
         expectedPost = publishedPostDetailSchema.parse(
           await this.publicationPostMapper({
+            runDate: input.runDate,
             runId: input.runId,
             generationOutputReference: parentReference,
             generatedPost: structuredClone(parent.value.post),
@@ -829,6 +845,7 @@ export class SupabasePipelineWorkspaceRepository {
     try {
       const artifact = artifactFromRow(row);
       const expectedArtifact = await this.#validateCandidate({
+        runDate: row.runDate,
         runId: row.runId,
         stage: row.stage,
         configurationFingerprint: row.configurationFingerprint,
@@ -836,6 +853,7 @@ export class SupabasePipelineWorkspaceRepository {
         artifact,
       });
       this.#validateRow(row, {
+        runDate: row.runDate,
         runId: row.runId,
         stage: row.stage,
         kind: expectedArtifact.kind,
@@ -863,6 +881,7 @@ export class SupabasePipelineWorkspaceRepository {
   #validateRow(
     row: ArtifactRow,
     expected: {
+      runDate: string;
       runId: string;
       stage: PipelineStage;
       kind: SupabasePipelineWorkspaceArtifactKind;
@@ -881,6 +900,7 @@ export class SupabasePipelineWorkspaceRepository {
       payloadFingerprint: row.payloadFingerprint,
     });
     if (
+      row.runDate !== expected.runDate ||
       row.runId !== expected.runId ||
       row.stage !== expected.stage ||
       row.kind !== expected.kind ||

@@ -114,10 +114,26 @@ export class AiSdkSemanticEvaluator
         throw new GenerationProviderError("PROVIDER_TIMEOUT", { cause: error });
       if (input.abortSignal?.aborted)
         throw new GenerationProviderError("PROVIDER_ABORTED", { cause: error });
-      if (
-        NoObjectGeneratedError.isInstance(error) ||
-        NoOutputGeneratedError.isInstance(error)
-      ) {
+      if (NoObjectGeneratedError.isInstance(error)) {
+        let audit: ModelCallAudit | null = null;
+        if (error.usage) {
+          try {
+            const usage = parseModelUsage(error.usage);
+            audit = makeAudit({
+              usage,
+              finishReason: error.finishReason ?? null,
+              responseId: error.response?.id ?? null,
+            });
+          } catch {
+            audit = null;
+          }
+        }
+        throw new GenerationProviderError("INVALID_MODEL_OUTPUT", {
+          cause: error,
+          audit,
+        });
+      }
+      if (NoOutputGeneratedError.isInstance(error)) {
         throw new GenerationProviderError("INVALID_MODEL_OUTPUT", {
           cause: error,
         });

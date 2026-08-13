@@ -586,6 +586,31 @@ function setup(sources: readonly SourceRegistryEntry[]) {
 }
 
 describe("Supabase fake-only 전체 일일 실행", () => {
+  it("dry_run은 수집·선정만 영속화하고 모델·발행 의존성을 요구하지 않는다", async () => {
+    const fake = setup([primarySource, independentSource]);
+
+    const result = await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    expect(result.status).toBe("executed");
+    if (result.status !== "executed") return;
+    expect(result.journal.run.steps.map((step) => step.stage)).toEqual([
+      "collect",
+      "score",
+    ]);
+    expect(result.journal.run.status).toBe("succeeded_without_publish");
+    expect(fake.provider.calls).toHaveLength(0);
+    expect(fake.semanticCalls).toBe(0);
+    expect(fake.ledger.prepareInputs).toHaveLength(0);
+    expect(fake.publishInputs).toHaveLength(0);
+    expect(fake.receiptCalls).toBe(0);
+  });
+
   it("collect→score→ledgered generate→validate→publish를 정확한 계보로 실행한다", async () => {
     const fake = setup([primarySource, independentSource]);
     fake.contentPersistence.ambiguousCollect = true;

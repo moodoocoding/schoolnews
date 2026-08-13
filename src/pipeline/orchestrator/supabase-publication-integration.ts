@@ -63,7 +63,7 @@ function fingerprint(value: unknown): string {
   return createHash("sha256").update(stableJson(value), "utf8").digest("hex");
 }
 
-function deterministicIdentity(input: {
+export function createDeterministicPublicationIdentity(input: {
   runDate: string;
   runId: string;
   generationOutputReference: string;
@@ -126,6 +126,41 @@ async function getValidatedGeneration(
   return stored;
 }
 
+export async function mapSupabasePublicationForGeneration(input: {
+  workspace: PublicationWorkspace;
+  runDate: string;
+  runId: string;
+  generationOutputReference: string;
+  generatedPost: Parameters<typeof mapValidatedGenerationToPublishedPost>[0]["generatedPost"];
+  qualityResult: QualityResult;
+}): Promise<PublishedPostDetail> {
+  const selected = await getSelectedTopic(input.workspace, input.runId);
+  if (
+    selected.artifact.kind !== "topic_selection" ||
+    selected.artifact.value.candidate === null
+  ) {
+    throw new DailyStepError("INVALID_SOURCE_DATA", false);
+  }
+  const identity = createDeterministicPublicationIdentity({
+    runDate: input.runDate,
+    runId: input.runId,
+    generationOutputReference: input.generationOutputReference,
+  });
+  return mapValidatedGenerationToPublishedPost({
+    identity: {
+      id: identity.postId,
+      slug: identity.slug,
+      publicationDateKst: input.runDate,
+      publishedAt: identity.publishedAt,
+      modifiedAt: identity.modifiedAt,
+      visual: identity.visual,
+    },
+    generatedPost: input.generatedPost,
+    qualityResult: input.qualityResult,
+    evidenceItems: selected.artifact.value.evidenceItems,
+  });
+}
+
 async function publicationForRun(
   workspace: PublicationWorkspace,
   context: Readonly<Pick<DailyStageFingerprintContext, "runId" | "runDate">>,
@@ -155,23 +190,18 @@ async function publicationForRun(
   ) {
     throw new DailyStepError("INVALID_SOURCE_DATA", false);
   }
-  const identity = deterministicIdentity({
+  const identity = createDeterministicPublicationIdentity({
     runDate: context.runDate,
     runId: context.runId,
     generationOutputReference: generated.outputReference,
   });
-  const post = mapValidatedGenerationToPublishedPost({
-    identity: {
-      id: identity.postId,
-      slug: identity.slug,
-      publicationDateKst: context.runDate,
-      publishedAt: identity.publishedAt,
-      modifiedAt: identity.modifiedAt,
-      visual: identity.visual,
-    },
+  const post = await mapSupabasePublicationForGeneration({
+    workspace,
+    runDate: context.runDate,
+    runId: context.runId,
+    generationOutputReference: generated.outputReference,
     generatedPost: generated.artifact.value.post,
     qualityResult: generated.artifact.value.qualityResult,
-    evidenceItems: selected.artifact.value.evidenceItems,
   });
   return {
     post,

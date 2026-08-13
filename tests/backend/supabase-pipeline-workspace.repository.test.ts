@@ -40,6 +40,7 @@ const PASSED_QUALITY = {
 };
 
 type ArtifactRow = Readonly<{
+  runDate: string;
   runId: string;
   stage: string;
   kind: string;
@@ -169,6 +170,7 @@ async function seedRows(options: {
     const metadata = await memory.getArtifactMetadata(outputReference);
     const payload = await memory.getArtifact(outputReference);
     rows.push({
+      runDate: "2026-08-13",
       ...metadata,
       outputReference,
       payload: payload as unknown as Readonly<Record<string, unknown>>,
@@ -199,6 +201,7 @@ class FakeDataSource implements SupabasePipelineWorkspaceDataSource {
     this.putRequests.push(structuredClone(input));
     if (this.nextPutResult !== null) return this.nextPutResult;
     const row: ArtifactRow = {
+      runDate: input.runDate,
       runId: input.runId,
       stage: input.stage,
       kind: input.kind,

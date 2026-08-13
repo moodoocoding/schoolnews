@@ -104,6 +104,17 @@ export {
   SUPABASE_SOURCE_ATTEMPT_RPC_NAME,
 } from "./supabase-source-attempt.repository";
 export {
+  SupabasePublicationHistoryError,
+  SupabasePublicationHistoryRepository,
+  SUPABASE_PUBLICATION_HISTORY_RPC_NAME,
+} from "./supabase-publication-history.repository";
+export type {
+  SupabasePublicationHistory,
+  SupabasePublicationHistoryErrorCode,
+  SupabasePublicationHistoryRpcDataSource,
+  SupabasePublicationHistoryRpcResult,
+} from "./supabase-publication-history.repository";
+export {
   SupabaseModelInvocationError,
   SupabaseModelInvocationRepository,
   SUPABASE_MODEL_INVOCATION_RPC_NAMES,

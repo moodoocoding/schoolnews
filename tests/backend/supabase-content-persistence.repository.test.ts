@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { describe, expect, it } from "vitest";
 
 import type { EvidenceItem, TopicCandidate } from "../../src/contracts";
@@ -13,6 +11,7 @@ import {
   type SupabaseContentPersistenceRpcName,
   type SupabaseContentPersistenceRpcResult,
 } from "../../src/repositories/supabase-content-persistence.repository";
+import { fingerprintSupabasePipelineArtifactPayload } from "../../src/repositories/supabase-pipeline-workspace.repository";
 
 const RUN = {
   runDate: "2026-08-13",
@@ -42,19 +41,8 @@ const evidenceResult = createRssExcerptEvidenceItem(article, source);
 if (!evidenceResult) throw new Error("evidence fixture expected");
 const evidence: EvidenceItem = evidenceResult;
 
-type Canonical = null | boolean | number | string | Canonical[] | { [key: string]: Canonical };
-function canonicalize(value: unknown): Canonical {
-  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
-  if (typeof value === "number") return value;
-  if (Array.isArray(value)) return value.map(canonicalize);
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => (left < right ? -1 : 1))
-      .map(([key, child]) => [key, canonicalize(child)]),
-  );
-}
 function hash(payload: unknown): string {
-  return createHash("sha256").update(JSON.stringify(canonicalize(payload))).digest("hex");
+  return fingerprintSupabasePipelineArtifactPayload(payload);
 }
 
 class FakeDataSource implements SupabaseContentPersistenceRpcDataSource {

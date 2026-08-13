@@ -54,6 +54,9 @@ const environmentSchema = z
       .optional(),
     LLM_ENABLED: z.enum(["true", "false"]).default("false"),
     LLM_PROVIDER: z.enum(["gemini"]).optional(),
+    AUTOMATION_MODE: z
+      .enum(["disabled", "dry_run", "live"])
+      .default("disabled"),
     GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED: z
       .enum(["true", "false"])
       .default("false"),
@@ -88,6 +91,36 @@ const environmentSchema = z
           code: "custom",
           path: ["GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED"],
           message: "무료 등급 데이터 사용 조건 확인이 필요합니다.",
+        });
+      }
+    }
+    if (environment.AUTOMATION_MODE === "live") {
+      if (environment.DATASTORE_PROVIDER !== "supabase") {
+        context.addIssue({
+          code: "custom",
+          path: ["AUTOMATION_MODE"],
+          message: "live 자동화는 Supabase 저장소에서만 허용됩니다.",
+        });
+      }
+      if (environment.LLM_ENABLED !== "true") {
+        context.addIssue({
+          code: "custom",
+          path: ["LLM_ENABLED"],
+          message: "live 자동화에는 명시적 LLM 활성화가 필요합니다.",
+        });
+      }
+      if (environment.CRON_SECRET === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["CRON_SECRET"],
+          message: "live 자동화에는 Cron 인증 비밀값이 필요합니다.",
+        });
+      }
+      if (environment.SUPABASE_SECRET_KEY === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["SUPABASE_SECRET_KEY"],
+          message: "live 자동화에는 Supabase 서버 Secret Key가 필요합니다.",
         });
       }
     }
@@ -186,6 +219,7 @@ export function parseEnvironment(
     GOOGLE_GENERATIVE_AI_API_KEY: input.GOOGLE_GENERATIVE_AI_API_KEY,
     LLM_ENABLED: input.LLM_ENABLED,
     LLM_PROVIDER: input.LLM_PROVIDER,
+    AUTOMATION_MODE: input.AUTOMATION_MODE,
     GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED:
       input.GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED,
     CRON_SECRET: input.CRON_SECRET,

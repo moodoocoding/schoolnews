@@ -8,6 +8,7 @@ describe("환경 변수 계약", () => {
 
     expect(environment.SITE_URL).toBe("http://localhost:3000");
     expect(environment.DATASTORE_PROVIDER).toBe("memory");
+    expect(environment.AUTOMATION_MODE).toBe("disabled");
     expect(environment.FIRESTORE_DATABASE_ID).toBe("(default)");
   });
 
@@ -168,5 +169,30 @@ describe("환경 변수 계약", () => {
         GOOGLE_GENERATIVE_AI_API_KEY: `google-key-${"a".repeat(24)}`,
       }),
     ).toThrow();
+  });
+
+  it("live 자동화는 Supabase·LLM·Cron 인증을 모두 요구한다", () => {
+    const base = {
+      NODE_ENV: "production",
+      DATASTORE_PROVIDER: "supabase",
+      SUPABASE_URL: "https://project-ref.supabase.co",
+      SUPABASE_PUBLISHABLE_KEY: `sb_publishable_${"a".repeat(24)}`,
+      SUPABASE_SECRET_KEY: `sb_secret_${"b".repeat(24)}`,
+      LLM_ENABLED: "true",
+      LLM_PROVIDER: "gemini",
+      GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED: "true",
+      GOOGLE_GENERATIVE_AI_API_KEY: `google-key-${"c".repeat(24)}`,
+    } as const;
+
+    expect(() =>
+      parseEnvironment({ ...base, AUTOMATION_MODE: "live" }),
+    ).toThrow();
+    expect(
+      parseEnvironment({
+        ...base,
+        AUTOMATION_MODE: "live",
+        CRON_SECRET: "d".repeat(32),
+      }).AUTOMATION_MODE,
+    ).toBe("live");
   });
 });

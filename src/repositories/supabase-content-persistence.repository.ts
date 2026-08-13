@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-
 import { z } from "zod";
+
+import { fingerprintSupabasePipelineArtifactPayload } from "./supabase-pipeline-workspace.repository";
 
 import {
   evidenceItemSchema,
@@ -269,7 +269,7 @@ function canonicalize(value: unknown): CanonicalJson {
   if (typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([key, item]) => [key, canonicalize(item)]),
     );
   }
@@ -278,12 +278,6 @@ function canonicalize(value: unknown): CanonicalJson {
 
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
-}
-
-function fingerprint(payload: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalize(payload)), "utf8")
-    .digest("hex");
 }
 
 function unique(values: readonly string[]): boolean {
@@ -307,7 +301,10 @@ function parseArtifactPayload(payload: unknown, kind: "news_ingestion" | "topic_
 }
 
 function assertFingerprint(descriptor: z.infer<typeof artifactDescriptorSchema>): void {
-  if (fingerprint(descriptor.payload) !== descriptor.payloadFingerprint) {
+  if (
+    fingerprintSupabasePipelineArtifactPayload(descriptor.payload) !==
+    descriptor.payloadFingerprint
+  ) {
     throw new SupabaseContentPersistenceError("INVALID_CONTENT_INPUT");
   }
 }

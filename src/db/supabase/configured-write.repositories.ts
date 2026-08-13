@@ -5,8 +5,10 @@ import {
   SupabaseContentPersistenceRepository,
   SupabaseModelInvocationRepository,
   SupabasePipelineWorkspaceRepository,
+  SupabasePublicationHistoryRepository,
   SupabasePublishReceiptRepository,
   SupabasePublisherRepository,
+  SupabaseSourceAttemptRepository,
   type SupabasePipelineWorkspaceWriteAuthorityProvider,
   type SupabasePublicationPostMapper,
 } from "../../repositories";
@@ -30,6 +32,14 @@ import {
   createSupabasePublisherRpcDataSource,
   SupabasePublisherConfigurationError,
 } from "./publisher.data-source";
+import {
+  createSupabaseSourceAttemptRpcDataSource,
+  SupabaseSourceAttemptConfigurationError,
+} from "./source-attempt.data-source";
+import {
+  createSupabasePublicationHistoryRpcDataSource,
+  SupabasePublicationHistoryConfigurationError,
+} from "./publication-history.data-source";
 
 function requireServerConfig(environment: Environment): {
   projectUrl: string;
@@ -115,5 +125,33 @@ export function createConfiguredSupabasePublishReceiptRepository(
   }
   return new SupabasePublishReceiptRepository(
     createSupabasePublishReceiptRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabaseSourceAttemptRepository(
+  environment: Environment,
+): SupabaseSourceAttemptRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabaseSourceAttemptConfigurationError();
+  }
+  return new SupabaseSourceAttemptRepository(
+    createSupabaseSourceAttemptRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabasePublicationHistoryRepository(
+  environment: Environment,
+): SupabasePublicationHistoryRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabasePublicationHistoryConfigurationError();
+  }
+  return new SupabasePublicationHistoryRepository(
+    createSupabasePublicationHistoryRpcDataSource(config),
   );
 }

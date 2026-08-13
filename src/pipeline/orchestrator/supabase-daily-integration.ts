@@ -111,6 +111,12 @@ type SupabaseDailyWorkspace = Pick<
 >;
 
 export interface CreateSupabaseDailyStagesOptions {
+  /**
+   * `dry_run` stops after the durable score artifact. It does not require or
+   * construct model and publication dependencies. The default remains `live`
+   * for backwards compatibility with the existing integration contract.
+   */
+  executionMode?: "dry_run" | "live";
   workspace: SupabaseDailyWorkspace;
   contentPersistence: Pick<
     SupabaseContentPersistenceRepository,
@@ -119,12 +125,12 @@ export interface CreateSupabaseDailyStagesOptions {
     | "persistEmptyTopicSelection"
   >;
   sourceAttempt: Pick<SupabaseSourceAttemptRepository, "reserve">;
-  publisher: Pick<SupabasePublisherRepository, "publish">;
-  publishReceipt: Pick<SupabasePublishReceiptRepository, "get">;
+  publisher?: Pick<SupabasePublisherRepository, "publish">;
+  publishReceipt?: Pick<SupabasePublishReceiptRepository, "get">;
   sources: readonly SourceRegistryEntry[];
   /** Required injection. This factory never falls back to a live RSS fetch. */
   collectSource: NonNullable<RunNewsIngestionOptions["collectSource"]>;
-  generation: SupabaseDailyGenerationConfiguration;
+  generation?: SupabaseDailyGenerationConfiguration;
   collectionConfigurationId?: string;
   previousPostTitles?: readonly string[];
   previousContentFingerprints?: readonly string[];
@@ -333,29 +339,35 @@ function topicTitle(
 }
 
 function validateOptions(options: Readonly<CreateSupabaseDailyStagesOptions>) {
+  const executionMode = options.executionMode ?? "live";
+  const generation = options.generation;
   if (
     typeof options.collectSource !== "function" ||
     options.sources.length === 0 ||
-    options.generation.generatedRoutes.length < 1 ||
-    options.generation.generatedRoutes.length > 2 ||
-    options.generation.semanticRoutes.length < 1 ||
-    options.generation.semanticRoutes.length > 2 ||
-    options.generation.generatedRoutes.some(
-      (route) =>
-        typeof route.provider?.generate !== "function" ||
-        !route.metadata?.providerId ||
-        !route.metadata?.modelId ||
-        !route.promptVersion?.trim() ||
-        !route.reservationPolicyVersion?.trim(),
-    ) ||
-    options.generation.semanticRoutes.some(
-      (route) =>
-        typeof route.evaluator?.evaluate !== "function" ||
-        !route.providerId ||
-        !route.modelId ||
-        !route.promptVersion?.trim() ||
-        !route.reservationPolicyVersion?.trim(),
-    )
+    (executionMode === "live" &&
+      (generation === undefined ||
+        options.publisher === undefined ||
+        options.publishReceipt === undefined ||
+        generation.generatedRoutes.length < 1 ||
+        generation.generatedRoutes.length > 2 ||
+        generation.semanticRoutes.length < 1 ||
+        generation.semanticRoutes.length > 2 ||
+        generation.generatedRoutes.some(
+          (route) =>
+            typeof route.provider?.generate !== "function" ||
+            !route.metadata?.providerId ||
+            !route.metadata?.modelId ||
+            !route.promptVersion?.trim() ||
+            !route.reservationPolicyVersion?.trim(),
+        ) ||
+        generation.semanticRoutes.some(
+          (route) =>
+            typeof route.evaluator?.evaluate !== "function" ||
+            !route.providerId ||
+            !route.modelId ||
+            !route.promptVersion?.trim() ||
+            !route.reservationPolicyVersion?.trim(),
+        )))
   ) {
     throw new TypeError("Supabase 일일 실행의 주입 구성이 완전하지 않습니다.");
   }
@@ -403,22 +415,6 @@ export function createSupabaseDailyStages(
     sources,
     previousPostTitles,
     previousContentFingerprints,
-  });
-  const generationConfigurationFingerprint = fingerprint({
-    version: POST_GENERATION_PIPELINE_VERSION,
-    configurationId: options.generation.configurationId,
-    budget: options.generation.budget,
-    generatedRoutes: options.generation.generatedRoutes.map((route) => ({
-      ...route.metadata,
-      promptVersion: route.promptVersion,
-      reservationPolicyVersion: route.reservationPolicyVersion,
-    })),
-    semanticRoutes: options.generation.semanticRoutes.map((route) => ({
-      providerId: route.providerId,
-      modelId: route.modelId,
-      promptVersion: route.promptVersion,
-      reservationPolicyVersion: route.reservationPolicyVersion,
-    })),
   });
   const verifiedArtifactReferences = new Set<string>();
 
@@ -737,6 +733,33 @@ export function createSupabaseDailyStages(
     });
   };
 
+  if ((options.executionMode ?? "live") === "dry_run") {
+    return [collect, score];
+  }
+
+  const generation = options.generation;
+  const publisher = options.publisher;
+  const publishReceipt = options.publishReceipt;
+  if (!generation || !publisher || !publishReceipt) {
+    throw new TypeError("Supabase live 실행 의존성이 완전하지 않습니다.");
+  }
+  const generationConfigurationFingerprint = fingerprint({
+    version: POST_GENERATION_PIPELINE_VERSION,
+    configurationId: generation.configurationId,
+    budget: generation.budget,
+    generatedRoutes: generation.generatedRoutes.map((route) => ({
+      ...route.metadata,
+      promptVersion: route.promptVersion,
+      reservationPolicyVersion: route.reservationPolicyVersion,
+    })),
+    semanticRoutes: generation.semanticRoutes.map((route) => ({
+      providerId: route.providerId,
+      modelId: route.modelId,
+      promptVersion: route.promptVersion,
+      reservationPolicyVersion: route.reservationPolicyVersion,
+    })),
+  });
+
   const generate: DailyStageDefinition = {
     stage: "generate",
     inputFingerprint: null,
@@ -770,10 +793,10 @@ export function createSupabaseDailyStages(
         900_000,
         Math.max(
           5_000,
-          options.generation.budget.maxCallSeconds *
-            options.generation.budget.maxModelCalls *
+          generation.budget.maxCallSeconds *
+            generation.budget.maxModelCalls *
             1_000 +
-            options.generation.budget.maxModelCalls * 30_000 +
+            generation.budget.maxModelCalls * 30_000 +
             35_000,
         ),
       ),
@@ -829,11 +852,11 @@ export function createSupabaseDailyStages(
       if (!postGeneration) {
         const invocationAuthority = authority(context);
         const provider = new FallbackGeneratedPostProvider(
-          options.generation.generatedRoutes.map(
+          generation.generatedRoutes.map(
             (route, index) =>
               new LedgeredGeneratedPostProvider({
                 provider: route.provider,
-                ledger: options.generation.ledger,
+                ledger: generation.ledger,
                 authority: invocationAuthority,
                 metadata: route.metadata,
                 routeAttempt: (index + 1) as 1 | 2,
@@ -844,11 +867,11 @@ export function createSupabaseDailyStages(
           ),
         );
         const semanticEvaluator = new FallbackSemanticEvaluator(
-          options.generation.semanticRoutes.map(
+          generation.semanticRoutes.map(
             (route, index) =>
               new LedgeredSemanticEvaluator({
                 evaluator: route.evaluator,
-                ledger: options.generation.ledger,
+                ledger: generation.ledger,
                 authority: invocationAuthority,
                 providerId: route.providerId,
                 modelId: route.modelId,
@@ -864,7 +887,7 @@ export function createSupabaseDailyStages(
           semanticEvaluator,
           evidenceItems: selected.artifact.value.evidenceItems,
           evidencePolicy: selected.artifact.value.candidate.evidencePolicy,
-          budget: options.generation.budget,
+          budget: generation.budget,
           abortSignal: context.signal,
         });
       }
@@ -942,9 +965,9 @@ export function createSupabaseDailyStages(
 
   const publication = createSupabasePublicationStages({
     workspace: options.workspace,
-    publisher: options.publisher,
-    publishReceipt: options.publishReceipt,
-    configurationId: `${options.generation.configurationId}:publication-v1`,
+    publisher,
+    publishReceipt,
+    configurationId: `${generation.configurationId}:publication-v1`,
   });
   const stages = [collect, score, generate, ...publication];
   if (

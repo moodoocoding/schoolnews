@@ -97,7 +97,7 @@
 | 뉴스 수집 | RSS·공식 API 우선 + 허용된 제한적 HTML 파서 | 기사 후보 자동 수집 |
 | AI 처리 | 공급자 중립 인터페이스 + 구조화 출력을 지원하는 LLM | 근거 기반 글 작성과 의미 품질 평가 |
 | 일일 실행 | 순수 TypeScript `runDaily()` + CLI + 얇은 Cron 어댑터 | 스케줄러 교체와 수동 재실행 지원 |
-| 스케줄·배포 | M5에서 운영 환경과 비용을 확인한 뒤 확정 | 특정 플랫폼 종속 최소화 |
+| 스케줄·배포 | Vercel Functions + Cron (`0 22 * * *`, KST 07:00) | 인증된 하루 한 번 실행과 배포 단순화 |
 | 대표 비주얼 | 불변 게시물 ID 기반 SVG·CSS 추상 패턴 | 저작권·비용·실패 위험 제거 |
 | 관측 | 구조화 로그 + 오류 알림 | 실패 위치, 비용, 발행 결과 확인 |
 
@@ -228,7 +228,7 @@ LLM은 제공된 근거를 쉬운 한국어로 재구성하는 역할만 담당�
 - 후속 migration `202608130003_content_persistence_rpcs.sql`은 수집원·기사·근거·collect artifact를 한 트랜잭션으로, 선정 주제·관계·score artifact를 다른 한 트랜잭션으로 저장합니다. 입력 payload와 artifact, 정확한 부모 참조가 일치하지 않거나 동일 지문이 다른 ID와 충돌하면 fail-closed 처리합니다.
 - 서버 쓰기 어댑터는 content persistence, pipeline workspace와 `publish_post`만 호출하며 private table REST/DML을 사용하지 않습니다. 발행 전에는 통과한 generation artifact와 결정론적으로 변환한 publication artifact의 품질 결과·부모 계보·공개 게시물 내용을 다시 대조합니다.
 - 일일 단계 컨텍스트는 로그에 남기지 않는 lease token과 fence, running checkpoint 이후 journal revision을 어댑터에 전달합니다. 결정론적 `validate`는 모델 호출 단계가 아니며, `generate`만 비용·미가격 호출 회수 규칙의 적용 대상입니다.
-- 2026-08-13 최종 002~005 SQL을 운영 PostgreSQL의 단일 트랜잭션에서 컴파일한 뒤 `ROLLBACK`하고 잔여 객체가 없음을 확인했습니다. 이후 002→003→004→005를 순서대로 적용했고, 006 출처 예약, 007 모델 호출 장부, 008 발행 영수증 조정도 각각 원격 컴파일·권한 확인 후 적용했습니다. 현재 기존 프로젝트에는 001~008이 모두 반영돼 있습니다.
+- 2026-08-13 최종 002~005 SQL을 운영 PostgreSQL의 단일 트랜잭션에서 컴파일한 뒤 `ROLLBACK`하고 잔여 객체가 없음을 확인했습니다. 이후 002→003→004→005를 순서대로 적용했고 006 출처 예약, 007 모델 호출 장부, 008 발행 영수증 조정, 009 실제 사용량 예산, 010 게시 이력 조회, 011 artifact 실행일 결속도 원격 적용했습니다. SQL Editor 수동 적용 내역은 Supabase CLI migration ledger와 자동 동기화되지 않으므로 향후 `db push` 전에 실제 schema와 이력을 대조합니다.
 - 기존 Firestore 구현·설정 파일은 과거 수직 절편 재현을 위해 보존하지만 현재 선택 경로와 향후 운영 DB는 Supabase입니다.
 
 ### 샘플 저장소와 공개 화면
@@ -288,7 +288,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-기본 주소는 `http://localhost:3000`입니다. 이미 사용 중인 포트가 있으면 Next.js가 다른 로컬 포트를 선택합니다. 기본 `memory` 화면과 생성 회귀 테스트에는 Supabase와 LLM 키가 필요하지 않습니다. 현재 실제 LLM 공급자나 모델을 설정하지 않았으므로 개발 명령이 유료 API를 호출하지 않습니다.
+기본 주소는 `http://localhost:3000`입니다. 이미 사용 중인 포트가 있으면 Next.js가 다른 로컬 포트를 선택합니다. 기본 `memory` 화면과 생성 회귀 테스트에는 Supabase와 LLM 키가 필요하지 않습니다. Gemini와 Supabase 운영 어댑터가 구현돼 있지만 `AUTOMATION_MODE=live`, `LLM_ENABLED=true`, 공급자·키·무료 등급 데이터 사용 확인값이 모두 없으면 실제 모델 호출을 시작하지 않습니다.
 
 외부 DB 쓰기 없이 실제 RSS 수집부터 정규화·중복 제거·후보 평가까지 실행하려면 다음 명령을 사용합니다. 이 명령은 인메모리 저장소에서만 처리하고 웹사이트나 외부 서비스에 게시하지 않으며, 기사 본문을 로그에 출력하지 않습니다.
 
@@ -314,7 +314,7 @@ npm run daily:memory
 
 이 명령은 네트워크로 등록된 공식 RSS를 한 번 읽지만 기사 제목·본문·근거 passage를 로그에 출력하지 않습니다. 네트워크 요청 직전에 Supabase 006 RPC가 등록부의 24시간 정책과 대조해 서버 시각으로 간격을 예약하며, 너무 이른 재실행은 `TOO_SOON`으로 중단합니다. 현재 독립 보도 출처가 없어 정상 상태에서는 생성·게시 없이 보류하고 공개 DB에는 쓰지 않습니다.
 
-새 Supabase 프로젝트에서 공개 조회를 켜려면 `supabase/migrations`의 001~008을 번호 순서대로 적용한 뒤 다음 값을 `.env.local`에 설정합니다. 현재 연결된 기존 프로젝트에는 001~008이 적용돼 있습니다. 실제 키는 커밋하거나 `NEXT_PUBLIC_` 접두사로 노출하지 않습니다.
+새 Supabase 프로젝트에서 공개 조회와 영속 자동화를 켜려면 `supabase/migrations`의 001~011을 번호 순서대로 적용한 뒤 다음 값을 `.env.local`에 설정합니다. 현재 연결된 기존 프로젝트에는 001~011이 적용돼 있습니다. 실제 키는 커밋하거나 `NEXT_PUBLIC_` 접두사로 노출하지 않습니다.
 
 ```bash
 DATASTORE_PROVIDER=supabase
@@ -392,7 +392,7 @@ Supabase `006` migration은 DB에 고정한 MSIT 24시간 정책과 호출자 �
 
 완료 조건: 근거 없는 주장, 중복 주제, 출처 부족, 비용 초과와 품질 실패 결과가 공개되지 않습니다.
 
-상태: **1차 수직 절편 완료, 실제 LLM 연결 보류**. 공급자 중립 구조화 생성, 근거 전용 프롬프트, 감사·예산 기록, 결정론적 의미 검사, 최대 1회 수정과 최종 보류 흐름을 fake 공급자로 검증했습니다. 실제 LLM 공급자·모델·가격표, 감사 가능한 외부 의미 평가기, 과거 전체 게시물 사건 중복 검색과 모델 기반 모순 검사는 아직 연결하지 않았습니다.
+상태: **운영 Gemini 경계와 Supabase 호출 장부 연결 완료**. 두 물리 모델 route를 각각 호출 전 007 예약·호출 후 audit finalize로 감싼 뒤에만 fallback하며, 구조화 생성과 별도 의미 평가도 동일 예산에 포함합니다. 실제 운영 호출은 환경 opt-in과 독립 근거가 모두 충족될 때만 시작됩니다. 과거 게시 제목·기사 지문은 010 RPC에서 최대 365건을 읽고 조회 실패를 빈 이력으로 대체하지 않습니다.
 
 ### M4 — 멱등 일일 자동화
 
@@ -467,7 +467,17 @@ Supabase `006` migration은 DB에 고정한 MSIT 24시간 정책과 호출자 �
 - 009 forward migration은 미완료 model intent는 예약 상한, 완료 intent는 감사 기록의 실제 token·cost로 합산합니다. 그래서 첫 호출의 미사용 예약량을 다음 의미 평가가 안전하게 사용하면서도 호출 전 hard cap은 유지합니다. null/unpriced·비정상 audit는 계속 fail-closed입니다.
 - 정상 쓰기나 exact 조정 직후의 검증 결과는 같은 factory 실행 안에서만 재사용합니다. 따라서 바로 뒤의 두 번째 일시 조회 장애가 성공한 실행을 실패로 바꾸지 않고, 별도 프로세스의 재개는 다시 durable artifact/receipt를 조회합니다.
 
-상태: **fake-only 5단계 전체 factory 구현·검증 완료, 009 원격 미적용**. 고정 출처·가짜 Supabase 저장소·가짜 모델·가짜 publisher로 정상 발행, 독립 근거 부족 0-call 보류, 출처 예약 거부, collect/score 응답 유실, lease 회수와 exact publication 복구를 검증했습니다. 이 변경은 실제 RSS·Gemini·Supabase 원격 쓰기·공개 발행을 실행하지 않았습니다.
+상태: **5단계 운영 factory 구현, 009~011 적용 및 실제 DB 발행 검증 완료**. `dry_run`은 collect·score 뒤 종료해 모델·publisher를 구성하지 않고, `live`는 모든 물리 Gemini route를 장부 안쪽에서만 실행합니다. 고정 개발 근거와 fake 물리 모델을 사용하되 실제 003→007→002→`publish_post`→008 Supabase 경계를 통과한 테스트 게시물 1건을 발행했고 공개 Data API와 갤러리·상세에서 노출을 확인했습니다. 이 시험은 실제 RSS·Gemini를 호출하지 않았습니다.
+
+### M13 — 운영 연결과 배포 준비
+
+- 서버 전용 운영 조립은 공개 이력 조회 실패를 fail-closed하고, 허용된 RSS 등록부·24시간 예약·Gemini raw route·모델 예산·원자 발행·영수증 복구를 연결합니다.
+- Cron Route Handler는 `Authorization: Bearer CRON_SECRET`을 먼저 상수시간 비교한 뒤에만 DB와 모델 코드를 지연 로드합니다. 요청 query로 실행일을 지정할 수 없고 서버 KST 날짜만 사용하며, 함수 300초 한도 안에서 runner는 240초에 종료합니다.
+- Vercel Cron 설정은 매일 UTC 22:00, 한국시간 07:00에 `/api/cron/daily`을 호출합니다. 실패·차단은 HTTP 500, busy·기존 종료 실행은 멱등 결과로 응답하며 응답과 로그에 secret·기사 본문을 포함하지 않습니다.
+- 실제 공개 테스트는 `ALLOW_TEST_PUBLICATION=true`와 당일 KST `TEST_PUBLICATION_CONFIRM_DATE`가 모두 일치하고 대상 프로젝트가 고정된 경우에만 시작됩니다. 가짜 출처는 `.invalid`, 모델 비용은 숫자 0으로 기록하며 실제 Gemini·RSS 호출은 없습니다.
+- 2026-08-13 테스트 게시물 `[개발용 테스트] 초등 AI 수업 확인` 1건을 정상 계보로 발행했고 공개 읽기와 로컬 홈·상세에서 확인했습니다. 이 글은 실제 뉴스가 아니며 해당 날짜의 한 건 슬롯을 사용했습니다.
+
+상태: **코드·DB·테스트 발행 완료, Vercel 외부 배포 승인 대기**. 이용 허락이 확인된 독립 보도 출처는 아직 0곳이므로 Cron을 live로 배포하더라도 현재 공식 MSIT 한 곳만으로는 매일 안전 보류되고 실제 Gemini·자동 게시 호출은 0회가 정상입니다. 교육플러스·AI타임스·에듀프레스·EBS는 약관·RSS·재가공 허락 조건을 충족하지 못해 활성화하지 않았습니다.
 
 ## 개발 역할
 
@@ -549,26 +559,30 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M11-SUPABASE-PUBLICATION-001 | 최민재(루트) | 김도윤·최민재 | 공통 artifact descriptor, explicit stage authority, 결정론적 validate publication, publish 1회와 008 기반 중단·응답 유실 복구 수직 절편 구현 | `src/{pipeline/orchestrator,repositories}/**`, `tests/{backend,integration}/**`, `README.md` | fake-only publication E2E, lease 회수·checkpoint 응답 유실 회귀, 전체 검사 | collect→score 운영 factory·Cron 연결 |
 | 2026-08-13 | M12-SUPABASE-BUDGET-001 | 최민재(루트) | 박서연·최민재 | completed model intent는 실제 audit 사용량, reserved intent는 예약 상한으로 호출 전 예산을 합산하는 009 forward migration 작성 | `supabase/migrations/202608130009_*`, `tests/backend/model-invocation-budget-schema.test.ts` | 007·009 정적 13 tests, backend·typecheck·lint 통과 | 실제 PostgreSQL compile·원격 적용 |
 | 2026-08-13 | M12-SUPABASE-DAILY-FACTORY-001 | 최민재(루트) | 김도윤·박서연·최민재 | 출처 예약·003 수집/선정·007 모델 장부·002 검증·발행·008 영수증을 fake-only 5단계 factory로 조립 | `src/pipeline/orchestrator/**`, `src/repositories/**`, `tests/{backend,integration}/**`, `README.md` | exact 계보·commit-uncertain lease 회수·0-call 보류·발행 회귀 통과 | 009 적용 후 실제 단일 공식 RSS no-publish 실행 |
+| 2026-08-13 | M13-SUPABASE-009-011-APPLY | 최민재(루트) | 김도윤·박서연·최민재 | 실제 사용량 예산, 최근 발행 이력, artifact 실행일 결속 forward migration을 기존 프로젝트에 순차 적용 | `supabase/migrations/202608130009_*`~`011_*`, `.env.local`(Git 제외), `README.md` | SQL Editor transaction 성공, 010 Secret Key RPC 실조회 0건, 카탈로그·권한 검사 | 수동 적용 migration ledger 대조 |
+| 2026-08-13 | M13-OPS-AI-001 | 최민재(루트) | 박서연·최민재 | Gemini 물리 route별 raw factory, 보수적 입력 예약, 의미 평가 오류 audit 보존과 운영 env 활성화 게이트 구현 | `src/lib/ai/**`, `src/pipeline/orchestrator/ai-sdk-semantic-evaluator.ts`, `tests/content/**` | 관련 32 tests, content 98 tests, typecheck·lint 통과 | 첫 실제 eligible 호출의 예약량 telemetry 확인 |
+| 2026-08-13 | M13-TEST-PUBLICATION-001 | 최민재(루트) | 김도윤·박서연·최민재 | 당일·프로젝트 이중 확인 뒤 fixture 근거와 fake 모델로 실제 Supabase 전체 계보를 통과한 개발용 게시물 1건 발행 | `scripts/publish-supabase-test-post.ts`, `src/{db,pipeline,repositories}/**`, `tests/**`, `README.md` | 2 model audit, 5단계 성공, 공개 Data API 1건, 로컬 홈·상세·콘솔 오류 0 | 실제 기사로 교체 전 개발용 표시 유지 |
+| 2026-08-13 | M13-CRON-001 | 최민재(루트) | 최민재 | 인증 우선 Next.js Cron endpoint, 240초 runner 한도, 매일 KST 07:00 Vercel Cron 설정과 정직한 실패 응답 구현 | `src/app/api/cron/daily/route.ts`, `src/lib/ops/configured-supabase-automation.ts`, `vercel.json`, `.env.example`, `tests/integration/cron-route.test.ts` | 무인증 401·원격 초기화 0, 전체 62 files/445 tests, lint·typecheck·build·audit 0 | Vercel 프로젝트·환경 변수·공개 배포 승인 |
 
 ## 현재 상태
 
-**단계: M0~M11 완료 / Supabase 001~008 적용 / M12 fake-only collect→publish 전체 factory 완료 / 009 적용·실제 단일 출처 운영 검증·Cron 배포 보류**
+**단계: M0~M13 운영 코드 완료 / Supabase 001~011 적용 / 실제 개발용 게시물 1건 공개 / Vercel 배포 승인 대기 / 독립 출처 허락 대기**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
 - 데이터·콘텐츠·공개 화면 계약: 런타임 스키마와 회귀 테스트 구현 완료
 - 서브 에이전트 개발·검토·README 기록 방식: 확정
-- 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 게시물이 아직 없어 빈 갤러리 상태를 표시합니다.
-- Supabase: 기존 프로젝트에 001~008을 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, MSIT 24시간 예약, 모델 호출 intent·예산 장부와 발행 영수증 조정 RPC가 존재합니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`에만 저장했고 공개 조회, private 차단, Secret Key RPC 인증, publishable 거부, 강제 RLS와 즉시 재예약 차단을 확인했습니다. migration ledger schema는 없으므로 당분간 SQL Editor 순차 적용만 사용하고 CLI `db push/repair/include-all`은 사용하지 않습니다.
+- 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 투영의 개발용 테스트 게시물 1건을 갤러리와 상세에서 확인했습니다.
+- Supabase: 기존 프로젝트에 001~011을 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, MSIT 24시간 예약, 모델 호출 intent·실제 사용량 예산 장부, 게시 이력과 발행 영수증 조정 RPC가 존재합니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`에만 저장했고 공개 조회, private 차단, Secret Key RPC 인증, publishable 거부, 강제 RLS와 즉시 재예약 차단을 확인했습니다. SQL Editor 수동 적용 내역은 CLI migration ledger에 자동 기록되지 않으므로 `db push/repair/include-all`은 이력 대조 전 사용하지 않습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: MSIT 공식 RSS 1개에서 안전한 메타데이터 수집, 정규화, 중복 제거, 인메모리 멱등 저장, 후보 점수·근거 후보 생성까지 연결
 - 후보 점수와 생성 품질 게이트: 한국어 신호, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현. 사용자의 무료 등급 데이터 사용 확인에 따라 로컬 Gemini opt-in을 활성화했습니다. Gemini 3.6 최소 호출은 성공했고, 학생·보호자 식별 패턴이나 전체 근거 6,000 grapheme 초과 시 모델 호출 전에 보류합니다. 첫 `daily:memory` timeout 원인은 수정했지만 24시간 정책 때문에 같은 날 원격 재실행하지 않았습니다.
-- 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory를 구현했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. 현재는 외부 I/O를 주입 가짜로 고정한 통합 검증만 통과했고, 실제 Supabase 쓰기·Gemini·공개 발행을 자동으로 켜는 실행 진입점과 Cron은 아직 연결하지 않았습니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 54개 파일 422개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 발행 영수증은 실행 ID·리비전·검증 산출물과 서버 시각을 제외한 공개 본문 전체가 일치할 때만 인정하고, 한 실행 안의 확인 결과를 재사용해 일시 장애가 두 번째 조회에서 성공 발행을 보류시키지 않도록 회귀 검증했습니다. 002~005 통합 compile+rollback 및 순차 적용, 006~008 개별 원격 compile·적용을 확인했습니다. workspace RPC는 Secret Key에서 null을 반환하고 publishable key에서는 `42501`, 모델 장부 RPC는 publishable key에서 HTTP 401로 차단됩니다. 009 실제 PostgreSQL compile·적용과 다중 세션 lock-wait 회귀는 남았습니다.
+- 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory, 서버 전용 운영 조립, 인증 우선 Cron endpoint와 KST 07:00 스케줄 파일을 구현했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. 외부 Vercel 프로젝트 배포와 환경 변수 설정만 승인 대기입니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 62개 파일 445개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 실제 Supabase에서 fixture collect·score, 2개 model audit, validate·publish·receipt까지 성공했고 공개 Data API와 브라우저 노출을 확인했습니다. 실제 Gemini와 실제 RSS는 이 발행 시험에서 호출하지 않았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: 009는 코드·정적 검증만 완료했고 기존 Supabase 프로젝트에 아직 적용하지 않았습니다. 그러므로 새 전체 factory를 실제 운영 진입점에 연결하지 않았고, Supabase 기반 Gemini 호출과 예약 발행은 계속 비활성입니다. 완료된 model intent에 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 로컬 메모리 Gemini는 공식 RSS 한 곳만으로 독립 근거 기준을 통과하지 않아 0-call 보류됩니다. 재가공 허락이 명확한 독립 교육 보도 출처, canonical survivor, DNS 재바인딩 방어, Cron·알림, 접근성 자동 검사는 계속 남아 있습니다.
+- 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. 재가공 허락이 명확한 독립 교육 보도 출처는 0곳이어서 공식 RSS 한 곳만으로는 자동 생성·게시를 시작하지 않습니다. canonical survivor, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
 - 007은 호출·입력·출력·비용을 모델 호출 전에 영속 예약하고 실제 audit를 exact 합계로 결속합니다. 다만 공급자 성공 후 audit finalize와 generation artifact 저장 사이에 중단되면 모델을 중복 호출하지 않는 대신 생성 본문을 자동 복원하지 못해 해당 실행을 안전 보류합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 
-바로 다음 작업은 **009를 실제 PostgreSQL에서 compile+rollback 검증한 뒤 기존 Supabase 프로젝트에 적용하고, 단일 공식 RSS로 `collect → empty score → NO_ELIGIBLE_TOPIC` no-publish 운영 경로를 검증하는 것**입니다. 그 다음에 Cron·알림·배포를 연결합니다. 실제 글 작성·발행 검증에는 재가공 허락과 upstream provenance가 명확한 독립 교육 보도 출처가 추가로 필요합니다.
+바로 다음 외부 작업은 **사용자가 Vercel에 코드와 서버 환경 변수를 전송해 공개 배포를 만들도록 승인하는 것**입니다. 배포 후 Cron은 매일 수집·선정까지 자동 실행하지만, 이용 허락과 upstream provenance가 명확한 독립 교육 보도 출처가 추가되기 전에는 `NO_ELIGIBLE_TOPIC`으로 안전 보류합니다. 자동 게시 기준 자체를 낮추거나 허락 없는 매체를 넣지 않습니다.
