@@ -61,7 +61,7 @@ export const generatedPostSchema = z
   .object({
     title: graphemeTextSchema({ label: "제목", max: 36 }),
     oneLineSummary: citedSentenceSchema,
-    body: z.array(contentParagraphSchema).min(3).max(5),
+    body: z.array(contentParagraphSchema).length(3),
     questions: z
       .array(graphemeTextSchema({ label: "질문", max: 80 }))
       .min(1)
@@ -90,11 +90,11 @@ export const generatedPostSchema = z
       0,
     );
 
-    if (bodyLength > 1_000) {
+    if (bodyLength > 650) {
       context.addIssue({
         code: "custom",
         path: ["body"],
-        message: "본문은 최대 1000자여야 합니다.",
+        message: "본문은 최대 650자여야 합니다.",
       });
     }
 

@@ -52,6 +52,25 @@ describe("발행 전 결정론적 주제 신호", () => {
     expect(signals.socialMeaning).toBe(0);
   });
 
+  it("교육을 직접 언급하지 않아도 디지털 기술과 사람의 문제가 함께 있으면 교육 영향 후보로 본다", () => {
+    const source = candidateSource();
+    const article = candidateArticle(source, {
+      title: "AI 에이전트가 개인정보를 대신 판단하는 시대",
+      normalizedTitle: "ai 에이전트가 개인정보를 대신 판단하는 시대",
+      excerpt:
+        "새 AI 에이전트가 개인정보를 조회해 자동 의사결정을 수행하면서 저작권과 신뢰 문제도 함께 제기됐다.",
+    });
+
+    const signals = deriveTopicSignals({
+      articles: [article],
+      sourceRegistryEntries: [source],
+    });
+
+    expect(signals.elementaryRelevance).toBeGreaterThanOrEqual(0.6);
+    expect(signals.aiDigitalSpecificity).toBeGreaterThanOrEqual(0.6);
+    expect(signals.socialMeaning).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("같은 publisher group의 피드 두 건을 독립 출처 가산으로 세지 않는다", () => {
     const firstSource = candidateSource({
       publisherType: "news",

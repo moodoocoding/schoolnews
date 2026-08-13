@@ -3,7 +3,12 @@ import "server-only";
 import { createConfiguredSupabasePipelineRepositories } from "../../db/supabase/server";
 import type { Environment } from "../config/env";
 import { createGeminiRawRoutes } from "../ai/gemini-factory";
-import { collectRssSource, RSS_SOURCE_REGISTRY } from "../../pipeline/collectors";
+import {
+  collectNaverNewsSources,
+  collectRssSource,
+  createNaverPublisherSources,
+  RSS_SOURCE_REGISTRY,
+} from "../../pipeline/collectors";
 import {
   mapSupabasePublicationForGeneration,
   runSupabaseDailyPipeline,
@@ -68,6 +73,11 @@ export async function runConfiguredSupabaseAutomation(input: {
   const rawRoutes = createGeminiRawRoutes({
     apiKey: input.environment.GOOGLE_GENERATIVE_AI_API_KEY,
   });
+  const naverSources = createNaverPublisherSources();
+  const sources = [...RSS_SOURCE_REGISTRY, ...naverSources];
+  let naverOutcomesPromise:
+    | ReturnType<typeof collectNaverNewsSources>
+    | undefined;
 
   return runSupabaseDailyPipeline({
     store: repositories.dailyRun,
@@ -76,8 +86,21 @@ export async function runConfiguredSupabaseAutomation(input: {
     sourceAttempt: repositories.sourceAttempt,
     publisher: repositories.publisher,
     publishReceipt: repositories.publishReceipt,
-    sources: RSS_SOURCE_REGISTRY,
-    collectSource: (source, signal) => collectRssSource(source, { signal }),
+    sources,
+    collectSource: async (source, signal) => {
+      if (source.collectionType === "rss") {
+        return collectRssSource(source, { signal });
+      }
+      naverOutcomesPromise ??= collectNaverNewsSources({
+        sources: naverSources,
+        signal,
+      });
+      const outcome = (await naverOutcomesPromise).get(source.sourceId);
+      if (outcome === undefined) {
+        throw new Error("NAVER_NEWS_SOURCE_OUTCOME_MISSING");
+      }
+      return outcome;
+    },
     generation: {
       configurationId: `gemini-free-ledgered:${rawRoutes.modelChain.join(",")}`,
       ledger: repositories.modelInvocation,
@@ -85,7 +108,7 @@ export async function runConfiguredSupabaseAutomation(input: {
       generatedRoutes: rawRoutes.generatedRoutes,
       semanticRoutes: rawRoutes.semanticRoutes,
     },
-    collectionConfigurationId: "licensed-production-sources-v2",
+    collectionConfigurationId: "official-rss-and-naver-metadata-v3",
     previousPostTitles: history.titles,
     previousContentFingerprints: history.contentFingerprints,
     limits: PRODUCTION_RUN_LIMITS,

@@ -13,6 +13,7 @@ import {
 } from "./validated-article-sources";
 
 export const RSS_EXCERPT_LOCATOR = "RSS 요약";
+export const NEWS_SEARCH_EXCERPT_LOCATOR = "뉴스 검색 API 요약";
 export const RSS_EXCERPT_MIN_GRAPHEMES = 40;
 export const RSS_EXCERPT_MAX_GRAPHEMES = 800;
 
@@ -101,14 +102,19 @@ function createEvidenceFromValidatedPair(
     return null;
   }
 
+  const locator =
+    pair.source.collectionType === "api"
+      ? NEWS_SEARCH_EXCERPT_LOCATOR
+      : RSS_EXCERPT_LOCATOR;
+  const namespace = pair.source.collectionType === "api" ? "search" : "rss";
   const passageHash = sha256(passage);
   const identityHash = sha256(
-    `${pair.article.articleId}\n${RSS_EXCERPT_LOCATOR}\n${passageHash}`,
+    `${pair.article.articleId}\n${locator}\n${passageHash}`,
   );
   const evidence: EvidenceItem = {
-    evidenceId: `evidence:rss:${identityHash.slice(0, 32)}`,
+    evidenceId: `evidence:${namespace}:${identityHash.slice(0, 32)}`,
     articleId: pair.article.articleId,
-    passageId: `passage:rss:${identityHash.slice(0, 32)}`,
+    passageId: `passage:${namespace}:${identityHash.slice(0, 32)}`,
     passageHash,
     sourceId: pair.source.sourceId,
     publisherGroupId: pair.source.publisherGroupId,
@@ -124,7 +130,7 @@ function createEvidenceFromValidatedPair(
     publishedAt: pair.article.publishedAt,
     publishedAtPrecision: pair.article.publishedAtPrecision,
     passage,
-    locator: RSS_EXCERPT_LOCATOR,
+    locator,
   };
 
   return evidenceItemSchema.parse(evidence);

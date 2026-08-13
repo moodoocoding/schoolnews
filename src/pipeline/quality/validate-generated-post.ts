@@ -16,11 +16,11 @@ export const GENERATED_POST_QUALITY_VERSION = "generated-post-quality-v2";
 const CONTENT_LIMITS = {
   title: 36,
   oneLineSummary: 100,
-  body: 1_000,
-  minimumBody: 600,
+  body: 650,
+  minimumBody: 400,
   question: 80,
   minimumParagraphs: 3,
-  maximumParagraphs: 5,
+  maximumParagraphs: 3,
   minimumQuestions: 1,
   maximumQuestions: 2,
 } as const;
@@ -221,7 +221,7 @@ function checkContentLengths(post: GeneratedPost): QualityCheck {
     post.body.length < CONTENT_LIMITS.minimumParagraphs ||
     post.body.length > CONTENT_LIMITS.maximumParagraphs
   ) {
-    reasons.push("본문은 3~5문단이어야 합니다.");
+    reasons.push("본문은 정확히 3문단이어야 합니다.");
   }
   if (
     post.questions.length < CONTENT_LIMITS.minimumQuestions ||

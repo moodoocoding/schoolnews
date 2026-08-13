@@ -237,9 +237,16 @@ function findSingleSourceCausalOverreach(
       const hasUnverifiedRssSummary = evidence.some(
         (item) => item.authority === "none" && item.locator === "RSS 요약",
       );
+      const hasUnverifiedSearchSummary = evidence.some(
+        (item) =>
+          item.authority === "none" &&
+          item.locator === "뉴스 검색 API 요약",
+      );
       const sourceDescription = hasUnverifiedRssSummary
         ? "직접 사실 권한이 없는 RSS 요약을 포함한 단일 계열 근거"
-        : "독립적인 publisher·provenance 그룹이 부족한 근거";
+        : hasUnverifiedSearchSummary
+          ? "직접 사실 권한이 없는 뉴스 검색 API 요약을 포함한 단일 계열 근거"
+          : "독립적인 publisher·provenance 그룹이 부족한 근거";
 
       findings.push({
         code: "CAUSAL_OVERREACH",

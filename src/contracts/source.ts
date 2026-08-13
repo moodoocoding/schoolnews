@@ -60,11 +60,11 @@ export const sourceRegistryEntrySchema = z
       });
     }
 
-    if (source.collectionType !== "rss") {
+    if (source.collectionType === "html") {
       context.addIssue({
         code: "custom",
         path: ["collectionType"],
-        message: "현재 실제 수집기는 검토된 RSS 소스만 지원합니다.",
+        message: "원문 HTML 크롤링 수집원은 활성화할 수 없습니다.",
       });
     }
   });

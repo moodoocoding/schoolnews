@@ -92,7 +92,7 @@ export const generatedPostFixture: GeneratedPost = {
         },
         {
           sentenceId: "sentence-1-detail",
-          text: "교사는 도구를 먼저 선택하기보다 학생이 무엇을 배워야 하는지, AI가 어느 부분에서 도움을 줄 수 있는지, 결과를 어떻게 다시 확인할지를 함께 설계할 수 있습니다. 이런 순서가 있어야 기술이 학습 목표를 대신하지 않습니다.",
+          text: "도구보다 배울 내용과 확인 방법을 먼저 정해야 기술이 목표를 대신하지 않습니다.",
           claimIds: ["claim-1"],
         },
       ],
@@ -106,7 +106,7 @@ export const generatedPostFixture: GeneratedPost = {
         },
         {
           sentenceId: "sentence-2-detail",
-          text: "학생은 첫 번째 답을 바로 정답으로 받아적기보다 근거가 보이는지, 다른 자료와 맞는지, 빠진 관점은 없는지를 차례로 살펴볼 수 있습니다. 확신하기 어려운 내용은 교사와 동료에게 묻고 출처를 다시 찾는 과정이 필요합니다.",
+          text: "첫 답을 정답으로 받아들이기보다 다른 자료와 맞는지, 빠진 관점은 없는지 살펴볼 수 있습니다.",
           claimIds: ["claim-2"],
         },
       ],
@@ -120,7 +120,7 @@ export const generatedPostFixture: GeneratedPost = {
         },
         {
           sentenceId: "sentence-3-detail",
-          text: "가정에서도 AI를 얼마나 오래 썼는지만 묻기보다 어떤 질문을 만들었고 결과를 왜 고쳤는지 이야기할 수 있습니다. 아이가 자신의 판단을 말로 설명하게 하면 도구 사용과 생각하는 과정을 구분해 살펴는 데 도움이 됩니다.",
+          text: "가정에서도 사용 시간보다 어떤 질문을 만들고 결과를 왜 고쳤는지 이야기할 수 있습니다.",
           claimIds: ["claim-3"],
         },
       ],

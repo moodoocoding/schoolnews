@@ -107,11 +107,6 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
             text: `${primary.passage} 수업 목적과 학생에게 필요한 도움을 먼저 살펴보는 과정도 필요합니다. 교사는 사용 전에 학생에게 확인 순서를 설명하고 질문을 받을 수 있습니다.`,
             claimIds: ["claim-primary"],
           },
-          {
-            sentenceId: "sentence-primary-detail",
-            text: "교사는 서비스를 켜기 전에 어떤 정보가 입력되고 어디에 보관되는지 확인한 뒤, 학생이 직접 적어도 되는 내용과 교사에게 먼저 물어야 하는 내용을 구분할 수 있습니다. 수업 목표와 관계없는 개인정보는 처음부터 입력하지 않는 원칙도 학급과 함께 정할 수 있습니다.",
-            claimIds: ["claim-primary"],
-          },
         ],
       },
       {
@@ -121,11 +116,6 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
             text: `${independent.passage} 이 내용을 확인하면 교사와 학생이 AI 사용 전에 안전 원칙을 함께 정할 수 있습니다. 학생은 도구가 내놓은 답과 자신이 확인한 근거를 나란히 기록할 수 있습니다.`,
             claimIds: ["claim-independent"],
           },
-          {
-            sentenceId: "sentence-independent-detail",
-            text: "학생에게는 이름이나 사진처럼 개인을 알아볼 수 있는 정보를 넣지 않는 이유를 구체적인 사례로 설명할 필요가 있습니다. AI가 자신 있게 답하더라도 출처를 찾고 다른 자료와 비교하며, 이상하거나 불편한 결과는 혼자 해결하지 않고 어른에게 알리는 절차도 연습할 수 있습니다.",
-            claimIds: ["claim-independent"],
-          },
         ],
       },
       {
@@ -133,11 +123,6 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
           {
             sentenceId: "sentence-context",
             text: "두 자료는 개인정보와 안전 확인 내용을 함께 설명합니다. 수업에서는 입력하지 말아야 할 정보와 이상한 결과를 발견했을 때 알릴 방법을 구체적으로 정해 볼 수 있습니다. 활동이 끝난 뒤에는 지킨 원칙과 다음에 보완할 점을 짧게 정리할 수 있습니다.",
-            claimIds: ["claim-context"],
-          },
-          {
-            sentenceId: "sentence-context-detail",
-            text: "가정에서도 사용 시간을 묻는 데서 그치지 않고 어떤 질문을 입력했는지, 답을 무엇과 비교했는지, 개인 정보가 섞이지 않았는지를 함께 돌아볼 수 있습니다. 학교와 가정이 같은 안전 원칙을 사용하면 학생은 새로운 도구를 만날 때마다 스스로 확인할 순서를 익힐 수 있습니다.",
             claimIds: ["claim-context"],
           },
         ],
@@ -526,7 +511,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
             providerId: "supabase-fake",
             modelId: "supabase-fake-v1",
           },
-          promptVersion: "generated-post-v5",
+          promptVersion: "generated-post-v6",
           reservationPolicyVersion: "fake-reservation-v1",
           reservation: (request: { maxOutputTokens: number }) => ({
             inputTokens: 500,

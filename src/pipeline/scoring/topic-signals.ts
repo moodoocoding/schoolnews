@@ -5,7 +5,7 @@ import type {
 import { validateArticleSources } from "../retrieval";
 import type { TopicSignals } from "./topic-score";
 
-export const TOPIC_SIGNAL_VERSION = "topic-signals-v2";
+export const TOPIC_SIGNAL_VERSION = "topic-signals-v3";
 
 interface WeightedKeyword {
   phrase: string;
@@ -98,6 +98,38 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "school", weight: 0.55 },
     { phrase: "parent", weight: 0.5 },
     { phrase: "textbook", weight: 0.65 },
+  ] satisfies readonly WeightedKeyword[],
+  educationImpactBridge: [
+    { phrase: "아동", weight: 0.8 },
+    { phrase: "청소년", weight: 0.75 },
+    { phrase: "미성년자", weight: 0.85 },
+    { phrase: "개인정보", weight: 0.85 },
+    { phrase: "생체정보", weight: 0.9 },
+    { phrase: "디지털 신원", weight: 0.8 },
+    { phrase: "딥페이크", weight: 0.85 },
+    { phrase: "합성 콘텐츠", weight: 0.75 },
+    { phrase: "저작권", weight: 0.8 },
+    { phrase: "창작자", weight: 0.65 },
+    { phrase: "추천 알고리즘", weight: 0.75 },
+    { phrase: "AI 에이전트", weight: 0.8 },
+    { phrase: "인공지능 에이전트", weight: 0.8 },
+    { phrase: "자동 의사결정", weight: 0.85 },
+    { phrase: "플랫폼", weight: 0.55 },
+    { phrase: "스마트폰", weight: 0.6 },
+    { phrase: "디지털 격차", weight: 0.85 },
+    { phrase: "접근성", weight: 0.7 },
+    { phrase: "중독", weight: 0.65 },
+    { phrase: "허위정보", weight: 0.8 },
+    { phrase: "신뢰", weight: 0.6 },
+    { phrase: "privacy", weight: 0.85 },
+    { phrase: "biometric", weight: 0.9 },
+    { phrase: "deepfake", weight: 0.85 },
+    { phrase: "copyright", weight: 0.8 },
+    { phrase: "recommendation algorithm", weight: 0.75 },
+    { phrase: "ai agent", weight: 0.8 },
+    { phrase: "automated decision", weight: 0.85 },
+    { phrase: "digital divide", weight: 0.85 },
+    { phrase: "misinformation", weight: 0.8 },
   ] satisfies readonly WeightedKeyword[],
   nonElementaryContext: [
     { phrase: "중학교", weight: 1 },
@@ -237,8 +269,18 @@ function deriveKeywordSignals(
       text,
       TOPIC_KEYWORD_TAXONOMY.aiDigital,
     );
-    if (aiDigital > 0 && educationContext === 0) {
+    const educationImpactBridge = keywordSignal(
+      text,
+      TOPIC_KEYWORD_TAXONOMY.educationImpactBridge,
+    );
+    const hasEducationImpactAngle =
+      aiDigital >= 0.45 && educationImpactBridge >= 0.65;
+
+    if (aiDigital > 0 && educationContext === 0 && !hasEducationImpactAngle) {
       aiDigital = Math.min(aiDigital, 0.25);
+    } else if (hasEducationImpactAngle) {
+      aiDigital = Math.max(aiDigital, 0.6);
+      elementary = Math.max(elementary, 0.65);
     } else if (aiDigital > 0) {
       aiDigital = clampSignal(aiDigital + educationContext * 0.1);
     }
@@ -249,7 +291,10 @@ function deriveKeywordSignals(
     );
     const gatedSocial =
       elementary > 0 && aiDigital > 0
-        ? clampSignal(social * Math.min(1, (elementary + aiDigital) / 1.2))
+        ? clampSignal(
+            Math.max(social, hasEducationImpactAngle ? educationImpactBridge : 0) *
+              Math.min(1, (elementary + aiDigital) / 1.2),
+          )
         : 0;
 
     elementaryRelevance = Math.max(elementaryRelevance, elementary);
@@ -426,7 +471,7 @@ function deriveNovelty(
 }
 
 /**
- * Produces deterministic v1 signals without calling an LLM or backend module.
+ * Produces deterministic signals without calling an LLM or backend module.
  * Invalid article/source metadata throws before any score is returned.
  */
 export function deriveTopicSignals(

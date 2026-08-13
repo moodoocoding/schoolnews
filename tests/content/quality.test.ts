@@ -48,7 +48,7 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.blockingReasons).toContain("CONTENT_TOO_LONG");
   });
 
-  it("제목·요약·질문을 제외한 body가 600자 미만이면 차단한다", () => {
+  it("제목·요약·질문을 제외한 body가 400자 미만이면 차단한다", () => {
     const post = validGeneratedPost();
     post.body.forEach((paragraph, index) => {
       paragraph.sentences = [
@@ -71,14 +71,14 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.blockingReasons).not.toContain("CONTENT_TOO_LONG");
   });
 
-  it("순수 body가 600자이면 통과하고 1000자를 넘으면 차단한다", () => {
+  it("순수 body가 400자이면 통과하고 650자를 넘으면 차단한다", () => {
     const minimum = validGeneratedPost();
     minimum.body = [
       {
         sentences: [
           {
             sentenceId: "minimum-1",
-            text: "가".repeat(200),
+            text: "가".repeat(134),
             claimIds: ["claim-1"],
           },
         ],
@@ -87,7 +87,7 @@ describe("생성 게시물 1차 품질 게이트", () => {
         sentences: [
           {
             sentenceId: "minimum-2",
-            text: "나".repeat(200),
+            text: "나".repeat(133),
             claimIds: ["claim-2"],
           },
         ],
@@ -96,7 +96,7 @@ describe("생성 게시물 1차 품질 게이트", () => {
         sentences: [
           {
             sentenceId: "minimum-3",
-            text: "다".repeat(200),
+            text: "다".repeat(133),
             claimIds: ["claim-3"],
           },
         ],
@@ -112,17 +112,17 @@ describe("생성 게시물 1차 품질 게이트", () => {
     oversized.body[0].sentences = [
       {
         sentenceId: "oversized-1a",
-        text: "가".repeat(250),
+        text: "가".repeat(220),
         claimIds: ["claim-1"],
       },
       {
         sentenceId: "oversized-1b",
-        text: "라".repeat(250),
+        text: "라".repeat(220),
         claimIds: ["claim-1"],
       },
       {
         sentenceId: "oversized-1c",
-        text: "마".repeat(250),
+        text: "마".repeat(220),
         claimIds: ["claim-1"],
       },
     ];
