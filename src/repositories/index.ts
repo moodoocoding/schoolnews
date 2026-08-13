@@ -83,11 +83,13 @@ export type {
 export {
   SupabasePublisherError,
   SupabasePublisherRepository,
+  SUPABASE_BACKFILL_PUBLISH_RPC_NAME,
   SUPABASE_PUBLISH_RPC_NAME,
   supabasePublisherErrorCodes,
 } from "./supabase-publisher.repository";
 export type {
   SupabasePublishInput,
+  SupabasePublishRpcName,
   SupabasePublisherErrorCode,
   SupabasePublisherRpcDataSource,
   SupabasePublisherRpcError,

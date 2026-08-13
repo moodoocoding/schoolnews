@@ -14,6 +14,7 @@
     "daily:memory": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/run-memory-daily-pipeline.ts",
     "supabase:dry-run": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/run-supabase-dry-run.ts",
     "supabase:test-publish": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/publish-supabase-test-post.ts",
+    "supabase:backfill-august": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx scripts/backfill-supabase-august-2026.ts",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",

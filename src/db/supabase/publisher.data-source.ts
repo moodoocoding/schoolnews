@@ -4,10 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type {
+  SupabasePublishRpcName,
   SupabasePublisherRpcDataSource,
   SupabasePublisherRpcResult,
 } from "../../repositories/supabase-publisher.repository";
-import { SUPABASE_PUBLISH_RPC_NAME } from "../../repositories/supabase-publisher.repository";
 
 const PUBLISH_RPC_TIMEOUT_MS = 15_000;
 
@@ -42,7 +42,7 @@ const publisherConfigSchema = z
   .strict();
 
 type RpcCall = (
-  functionName: typeof SUPABASE_PUBLISH_RPC_NAME,
+  functionName: SupabasePublishRpcName,
   parameters: Readonly<Record<string, unknown>>,
 ) => Promise<SupabasePublisherRpcResult>;
 
@@ -61,7 +61,7 @@ export class SupabaseClientPublisherRpcDataSource
   constructor(private readonly rpcCall: RpcCall) {}
 
   rpc(
-    functionName: typeof SUPABASE_PUBLISH_RPC_NAME,
+    functionName: SupabasePublishRpcName,
     parameters: Readonly<Record<string, unknown>>,
   ): Promise<SupabasePublisherRpcResult> {
     return this.rpcCall(functionName, parameters);

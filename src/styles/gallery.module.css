@@ -1,27 +1,50 @@
 .pageShell {
   width: min(100% - 2rem, var(--content-width));
   margin-inline: auto;
-  padding-block: clamp(2.25rem, 7vw, 5rem) 5rem;
+  padding-block: clamp(1.5rem, 5vw, 3.5rem) 5rem;
 }
 
 .siteHeader {
-  max-width: 48rem;
-  margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+  margin-bottom: clamp(2rem, 6vw, 4rem);
+  padding-bottom: clamp(1.6rem, 4vw, 2.5rem);
+  border-bottom: var(--border-heavy);
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brandMark {
+  display: grid;
+  width: clamp(2.75rem, 7vw, 3.5rem);
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+  place-items: center;
+  border: var(--border-heavy);
+  border-radius: 50%;
+  background: var(--color-sun);
+  box-shadow: var(--shadow-hard-sm);
+  font-size: clamp(0.9rem, 2vw, 1.08rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  transform: rotate(-6deg);
 }
 
 .siteTitle,
 .siteBrand {
   margin: 0;
   color: var(--color-ink);
-  font-size: clamp(2rem, 6vw, 4.25rem);
-  font-weight: 760;
-  letter-spacing: -0.055em;
-  line-height: 1.05;
+  font-size: clamp(2rem, 7vw, 4.85rem);
+  font-weight: 900;
+  letter-spacing: -0.065em;
+  line-height: 0.98;
 }
 
 .siteBrand {
   display: inline-block;
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-size: clamp(1.65rem, 4vw, 2.6rem);
   text-decoration-color: transparent;
   text-underline-offset: 0.18em;
 }
@@ -30,11 +53,38 @@
   text-decoration-color: currentColor;
 }
 
+.dailyBadge {
+  margin-left: auto;
+  padding: 0.32rem 0.62rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-rose);
+  box-shadow: 2px 2px 0 var(--color-ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+  transform: rotate(2deg);
+}
+
 .tagline {
-  max-width: 38rem;
-  margin: 1rem 0 0;
+  display: flex;
+  max-width: 46rem;
+  margin: 1.35rem 0 0 clamp(0rem, 8vw, 4.25rem);
+  flex-direction: column;
+  color: var(--color-ink);
+  font-size: clamp(1.02rem, 2.4vw, 1.32rem);
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.taglineNote {
+  width: fit-content;
+  margin-top: 0.45rem;
+  padding: 0.05rem 0.28rem;
+  background: linear-gradient(transparent 56%, var(--color-sun) 56%);
   color: var(--color-muted);
-  font-size: clamp(1rem, 2vw, 1.18rem);
+  font-size: 0.78em;
+  font-weight: 700;
 }
 
 .sampleNotice {
@@ -59,16 +109,28 @@
 .gallery {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.35rem;
+  gap: 1.75rem;
 }
 
 .card {
   min-width: 0;
-  border: 1px solid var(--color-line);
+  border: var(--border-heavy);
   border-radius: var(--radius-card);
   background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-hard);
   overflow: clip;
+}
+
+.card:nth-child(4n + 1) {
+  transform: rotate(-0.35deg);
+}
+
+.card:nth-child(4n + 2) {
+  transform: rotate(0.25deg);
+}
+
+.card:nth-child(4n + 3) {
+  transform: rotate(-0.15deg);
 }
 
 .cardLink {
@@ -86,17 +148,19 @@
 .patternVisual {
   position: relative;
   aspect-ratio: 4 / 3;
+  border-bottom: var(--border-heavy);
   background:
     radial-gradient(
       circle at var(--pattern-x) var(--pattern-y),
-      hsl(var(--pattern-hue) 57% 67%) 0 13%,
-      transparent 13.5%
+      var(--color-paper) 0 12%,
+      var(--color-ink) 12.5% 13.5%,
+      transparent 14%
     ),
     linear-gradient(
       var(--pattern-angle),
-      hsl(var(--pattern-hue-alt) 39% 82%) 0 42%,
-      hsl(var(--pattern-hue) 44% 72%) 42% 63%,
-      hsl(var(--pattern-hue-alt) 31% 91%) 63%
+      hsl(var(--pattern-hue-alt) 78% 82%) 0 42%,
+      hsl(var(--pattern-hue) 78% 68%) 42% 63%,
+      hsl(var(--pattern-hue-alt) 76% 91%) 63%
     );
   overflow: hidden;
 }
@@ -104,8 +168,8 @@
 .patternVisual::after {
   position: absolute;
   inset: 12% 9%;
-  border: 1px solid rgb(255 255 255 / 62%);
-  border-radius: 50%;
+  border: 2px solid var(--color-ink);
+  border-radius: 42% 58% 55% 45%;
   content: "";
   transform: rotate(var(--pattern-angle));
 }
@@ -116,9 +180,9 @@
   bottom: -24%;
   width: 57%;
   aspect-ratio: 1;
-  border: 1px solid rgb(41 39 32 / 18%);
+  border: 2px solid var(--color-ink);
   border-radius: 50%;
-  background: rgb(255 253 248 / 34%);
+  background: var(--color-rose);
 }
 
 .patternLine {
@@ -126,29 +190,36 @@
   top: 16%;
   left: 7%;
   width: 74%;
-  height: 1px;
-  background: rgb(41 39 32 / 24%);
+  height: 3px;
+  background: var(--color-ink);
   transform: rotate(var(--pattern-line-angle));
   transform-origin: left;
 }
 
 .cardBody {
-  padding: 1.15rem 1.15rem 1.35rem;
+  padding: 1.15rem 1.2rem 1.4rem;
 }
 
 .cardDate {
-  color: var(--color-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
+  display: inline-block;
+  padding: 0.2rem 0.48rem;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 999px;
+  background: var(--color-sky);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
 }
 
 .cardTitle {
   display: -webkit-box;
   margin: 0.55rem 0 0;
-  font-size: clamp(1.15rem, 2.5vw, 1.38rem);
-  letter-spacing: -0.035em;
-  line-height: 1.38;
+  font-size: clamp(1.18rem, 2.5vw, 1.45rem);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.3;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -159,7 +230,7 @@
   margin: 0.65rem 0 0;
   color: var(--color-muted);
   font-size: 0.94rem;
-  line-height: 1.62;
+  line-height: 1.58;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -181,9 +252,9 @@
   align-items: center;
   justify-content: center;
   padding: 0.55rem 1rem;
-  border: 1px solid var(--color-ink);
+  border: var(--border-heavy);
   border-radius: 999px;
-  background: transparent;
+  background: var(--color-sun);
   color: var(--color-ink);
   font: inherit;
   font-weight: 700;
@@ -194,9 +265,10 @@
 .emptyState {
   max-width: 35rem;
   padding: clamp(2rem, 7vw, 4rem);
-  border: 1px solid var(--color-line);
+  border: var(--border-heavy);
   border-radius: var(--radius-card);
-  background: var(--color-surface);
+  background: var(--color-sky);
+  box-shadow: var(--shadow-hard);
 }
 
 .emptyState h1,
@@ -223,19 +295,20 @@
   .card {
     transition:
       transform 180ms ease,
-      box-shadow 180ms ease;
+      box-shadow 140ms ease;
   }
 
   .card:hover {
-    box-shadow: 0 20px 52px rgb(76 57 35 / 14%);
-    transform: translateY(-3px);
+    box-shadow: 1px 1px 0 var(--color-ink);
+    transform: translate(3px, 3px) rotate(0);
   }
 
   .pagination a:hover,
   .emptyState a:hover,
   .emptyState button:hover {
-    background: var(--color-ink);
-    color: var(--color-surface);
+    box-shadow: 1px 1px 0 var(--color-ink);
+    color: var(--color-ink);
+    transform: translate(2px, 2px);
   }
 }
 
@@ -252,11 +325,19 @@
 @media (min-width: 64rem) {
   .gallery {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.6rem;
+    gap: 2rem;
   }
 }
 
 @media (max-width: 41.999rem) {
+  .dailyBadge {
+    display: none;
+  }
+
+  .tagline {
+    margin-left: 0;
+  }
+
   .sampleNotice {
     align-items: flex-start;
     flex-direction: column;

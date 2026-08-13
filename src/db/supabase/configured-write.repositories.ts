@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Environment } from "../../lib/config/env";
 import {
+  SUPABASE_BACKFILL_PUBLISH_RPC_NAME,
   SupabaseContentPersistenceRepository,
   SupabaseModelInvocationRepository,
   SupabasePipelineWorkspaceRepository,
@@ -97,6 +98,25 @@ export function createConfiguredSupabasePublisherRepository(
   }
   return new SupabasePublisherRepository(
     createSupabasePublisherRpcDataSource(config),
+  );
+}
+
+/**
+ * Explicit operator-only publisher for the approved 2026-08-01..12 backfill.
+ * It is intentionally absent from the normal configured pipeline bundle.
+ */
+export function createConfiguredSupabaseBackfillPublisherRepository(
+  environment: Environment,
+): SupabasePublisherRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabasePublisherConfigurationError();
+  }
+  return new SupabasePublisherRepository(
+    createSupabasePublisherRpcDataSource(config),
+    SUPABASE_BACKFILL_PUBLISH_RPC_NAME,
   );
 }
 

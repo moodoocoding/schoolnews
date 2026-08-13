@@ -1,16 +1,22 @@
 :root {
-  --color-paper: #f7f1e5;
-  --color-surface: #fffdf8;
-  --color-ink: #292720;
-  --color-muted: #625d51;
-  --color-line: #d7ccbb;
-  --color-accent: #743c2c;
-  --color-accent-soft: #f0ded1;
+  --color-paper: #fff4dd;
+  --color-surface: #fffdf7;
+  --color-ink: #26201a;
+  --color-muted: #665b4e;
+  --color-line: #b9aa91;
+  --color-accent: #e34c25;
+  --color-accent-soft: #ffdbc9;
+  --color-sun: #ffd84d;
+  --color-rose: #ffb9cc;
+  --color-sky: #a5dcff;
   --color-focus: #1b5f72;
-  --shadow-card: 0 16px 44px rgb(76 57 35 / 8%);
-  --radius-card: 1.1rem;
-  --content-width: 1200px;
+  --border-heavy: 2px solid var(--color-ink);
+  --shadow-hard: 5px 5px 0 var(--color-ink);
+  --shadow-hard-sm: 3px 3px 0 var(--color-ink);
+  --radius-card: 0.9rem;
+  --content-width: 1120px;
   --reading-width: 720px;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
   --font-sans: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", Inter,
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -32,13 +38,21 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 8% 4%, rgb(255 255 255 / 58%), transparent 27rem),
-    var(--color-paper);
+  background-color: var(--color-paper);
+  background-image: radial-gradient(rgb(38 32 26 / 9%) 0.7px, transparent 0.7px);
+  background-size: 15px 15px;
 }
 
 a {
   color: inherit;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: var(--color-sun);
+  color: var(--color-ink);
 }
 
 button,

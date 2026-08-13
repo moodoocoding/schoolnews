@@ -10,6 +10,11 @@ import {
 } from "../contracts";
 
 export const SUPABASE_PUBLISH_RPC_NAME = "publish_post" as const;
+export const SUPABASE_BACKFILL_PUBLISH_RPC_NAME =
+  "publish_backfill_post" as const;
+export type SupabasePublishRpcName =
+  | typeof SUPABASE_PUBLISH_RPC_NAME
+  | typeof SUPABASE_BACKFILL_PUBLISH_RPC_NAME;
 
 export type SupabasePublisherRpcError = Readonly<{
   code?: string;
@@ -23,7 +28,7 @@ export type SupabasePublisherRpcResult = Readonly<{
 
 export interface SupabasePublisherRpcDataSource {
   rpc(
-    functionName: typeof SUPABASE_PUBLISH_RPC_NAME,
+    functionName: SupabasePublishRpcName,
     parameters: Readonly<Record<string, unknown>>,
   ): Promise<SupabasePublisherRpcResult>;
 }
@@ -76,6 +81,7 @@ export const supabasePublisherErrorCodes = [
   "ACTIVE_JOURNAL_REQUIRED",
   "INVALID_SOURCE_DATA",
   "DUPLICATE_PUBLICATION_DATE",
+  "BACKFILL_DATE_NOT_ALLOWED",
   "SLUG_CONFLICT",
   "RPC_PERMISSION_DENIED",
   "PUBLISH_TIMEOUT_AMBIGUOUS",
@@ -95,6 +101,7 @@ const domainErrorCodes = new Set<SupabasePublisherErrorCode>([
   "ACTIVE_JOURNAL_REQUIRED",
   "INVALID_SOURCE_DATA",
   "DUPLICATE_PUBLICATION_DATE",
+  "BACKFILL_DATE_NOT_ALLOWED",
   "SLUG_CONFLICT",
 ]);
 
@@ -192,13 +199,16 @@ function samePublishedContent(
  * this adapter never retries a call whose commit state may be unknown.
  */
 export class SupabasePublisherRepository {
-  constructor(private readonly dataSource: SupabasePublisherRpcDataSource) {}
+  constructor(
+    private readonly dataSource: SupabasePublisherRpcDataSource,
+    private readonly rpcName: SupabasePublishRpcName = SUPABASE_PUBLISH_RPC_NAME,
+  ) {}
 
   async publish(input: SupabasePublishInput): Promise<SupabasePublishReceipt> {
     const parsed = parseInput(input);
     let result: SupabasePublisherRpcResult;
     try {
-      result = await this.dataSource.rpc(SUPABASE_PUBLISH_RPC_NAME, {
+      result = await this.dataSource.rpc(this.rpcName, {
         p_run_date: parsed.runDate,
         p_run_id: parsed.runId,
         p_lease_token: parsed.leaseToken,

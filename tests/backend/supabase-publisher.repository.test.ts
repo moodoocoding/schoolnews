@@ -5,6 +5,7 @@ import {
   SupabasePublisherError,
   SupabasePublisherRepository,
   type SupabasePublisherRpcDataSource,
+  type SupabasePublishRpcName,
   type SupabasePublisherRpcResult,
 } from "../../src/repositories/supabase-publisher.repository";
 import { publishedPostDetailFixture } from "../fixtures/contracts";
@@ -29,7 +30,7 @@ const passedQuality: QualityResult = {
 };
 
 type RpcCall = {
-  functionName: "publish_post";
+  functionName: SupabasePublishRpcName;
   parameters: Readonly<Record<string, unknown>>;
 };
 
@@ -43,7 +44,7 @@ class FakePublisherDataSource implements SupabasePublisherRpcDataSource {
   ) {}
 
   async rpc(
-    functionName: "publish_post",
+    functionName: SupabasePublishRpcName,
     parameters: Readonly<Record<string, unknown>>,
   ): Promise<SupabasePublisherRpcResult> {
     this.calls.push({ functionName, parameters });

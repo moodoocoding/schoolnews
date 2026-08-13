@@ -484,6 +484,16 @@ Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을
 
 상태: **코드·DB·테스트 발행·허가된 독립 기관 출처·Vercel Production·Cron·자동 게시 활성화 완료**. EC 디지털전략 RSS는 CC BY 4.0 조건을 확인해 독립 연구 출처로 활성화했습니다. 교육플러스·AI타임스·에듀프레스·EBS는 약관·RSS·재가공 허락 조건을 충족하지 못해 활성화하지 않았습니다. 같은 사건을 직접 뒷받침하는 두 출처가 없으면 여전히 안전 보류됩니다. Production은 `https://schoolnews-neon.vercel.app`이며 Cron은 매일 UTC 22:00(KST 07:00)에 실행됩니다.
 
+### M15 — 8월 기록 백필과 갤러리 리디자인
+
+- 사용자가 명시적으로 승인한 2026년 8월 1~12일 기록만 처리하는 `publish_backfill_post` RPC를 추가했습니다. 일반 `publish_post`의 당일 KST 계약은 바꾸지 않았고, 새 RPC는 정확한 날짜 범위·과거 날짜·활성 lease·fence·journal revision·검증 publication artifact·근거 계보를 모두 확인한 뒤에만 공개합니다.
+- 공개 화면의 `publishedAt` 계약과 KST 날짜 일치를 유지하기 위해 백필 게시 시각은 각 기록일 오전 7시로 고정합니다. 실제 원격 적용·리비전 생성 시각은 별도 감사 시각으로 남습니다. 화면 날짜는 원문 기사 발행일이 아니라 이 서비스의 기록일이며, 각 출처의 실제 발행일은 상세의 참고 출처에 따로 표시됩니다.
+- 12개 기록은 교육부, UNESCO, UNICEF, OECD, World Bank, 유럽연합 집행위원회, 영국·미국 교육 당국과 공개 학술 메타데이터에서 확인한 사실만 짧게 재구성했습니다. 원문 문장·사진·표를 복제하지 않고 날짜마다 공식 또는 1차 자료와 독립 기관·연구 자료를 하나씩 연결했습니다.
+- 백필 실행기는 대상 프로젝트 ID와 두 개의 명시적 확인 환경값이 없으면 시작하지 않습니다. 실제 Gemini 대신 운영자가 검토한 결정론적 콘텐츠를 사용하지만, 수집·선정·모델 호출 감사·구조 및 의미 품질·publication artifact·원자 발행의 기존 전체 계보는 그대로 통과합니다.
+- 갤러리와 상세 화면은 `codex-resets.com`의 스티커 시트 네오브루탈리즘을 참고해 따뜻한 크림 종이 배경, 굵은 잉크 외곽선, 단단한 오프셋 그림자, 오렌지·노랑·분홍·하늘색 포인트와 눌리는 카드 움직임으로 재해석했습니다. 사이트의 한국어 가독성, 1·2·3열 갤러리, 키보드 포커스와 외부 이미지 없는 결정론적 패턴은 유지합니다.
+
+상태: **코드·콘텐츠·정적 안전 검사 완료, 운영 적용과 12건 공개 검증 진행 중**.
+
 ## 개발 역할
 
 프로젝트의 개발 관점은 다음 네 프로필로 나뉩니다.
@@ -571,10 +581,11 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M14-INDEPENDENT-SOURCE-001 | 최민재(루트) | 김도윤·박서연·최민재 | CC BY 4.0 EU 디지털전략 RSS를 독립 기관·연구 출처로 추가하고 teaser 최소 수집, 24시간 정책, 한국어·영어 주제 개념 묶음을 구현·원격 적용 | `src/pipeline/{collectors,scoring,orchestrator,quality}/**`, `supabase/migrations/202608130012_*`, `scripts/smoke-rss-source.ts`, `tests/**`, `README.md` | 012 SQL Editor 적용·정책 2행 확인, 실제 EC RSS 10건·오류 0·모델/게시 0, 교차언어 회귀 통과 | 관련 없는 영문 사건 결합 방지 회귀 유지 |
 | 2026-08-13 | M14-SECRET-ROTATION-001 | 최민재(루트) | 최민재 | 대화 중 노출된 Supabase 서버 키를 Vercel 전용 키로 교체하고 로컬·Production 환경을 갱신한 뒤 이전 키 폐기 | `.env.local`(Git 제외), Vercel Production, Supabase API Keys | 새 키로 006 TOO_SOON RPC 성공, 이전 키 삭제 확인, 비밀값 Git 미추적 | 키 정기 교체와 최소 권한 유지 |
 | 2026-08-13 | M14-VERCEL-PRODUCTION-001 | 최민재(루트) | 최민재 | GitHub `main`의 `acf419d`를 Vercel Production에 배포하고 Supabase·Gemini·live 자동화 환경, 인증 Cron과 운영 도메인을 활성화 | GitHub `main`, Vercel Production 환경, `vercel.json`, `README.md` | 배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R` Ready, 홈·상세 공개 확인, Cron Enabled·`0 22 * * *`, 무인증 요청 `401 UNAUTHORIZED`, 공개 게시물 1건 유지 | 다음 KST 07:00 실제 예약 실행과 실패 알림 점검 |
+| 2026-08-13 | M15-AUGUST-BACKFILL-001 | 최민재(루트) | 김도윤·박서연·이현우·최민재 | 8월 1~12일 전용 service-role 백필 RPC, 실제 출처 기반 12개 기록과 승인 이중 확인 실행기, 스티커 시트형 갤러리·상세 리디자인 구현 | `supabase/migrations/202608130013_*`, `scripts/backfill-*`, `src/{db,repositories,components,styles,app}/**`, `tests/{backend,content}/**`, `README.md` | 날짜 범위·권한·KST 시각·콘텐츠 구조·근거·의미 품질 및 날짜별 실제 선정 사전검증 포함 전체 65파일 456테스트, typecheck·lint·build·diff-check 통과; 로컬 브라우저 렌더 확인 | 운영 013 적용, 12건 발행·사이트 확인, GitHub/Vercel 배포 |
 
 ## 현재 상태
 
-**단계: M0~M14 운영 코드 완료 / Supabase 001~012 적용 / 실제 개발용 게시물 1건 공개 / 허가된 독립 기관 출처 실수집 완료 / Vercel Production·Cron·자동 게시 활성화 완료**
+**단계: M0~M15 운영 코드 완료 / Supabase 001~012 적용·013 적용 진행 / 8월 1~12일 실제 출처 기록 공개 진행 / Vercel Production·Cron·자동 게시 활성화 완료**
 
 - 제품 범위와 게시물 구조: 확정
 - 기술 방향과 MVP 제외 항목: 확정
