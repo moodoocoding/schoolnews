@@ -71,6 +71,24 @@ function normalizeOriginalUrl(value: string): string | null {
   }
 }
 
+function normalizeHostedArticleUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !["n.news.naver.com", "news.naver.com"].includes(
+        url.hostname.toLowerCase(),
+      )
+    ) {
+      return null;
+    }
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function truncate(value: string, maximum: number): string {
   const segments = Array.from(
     new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(value),
@@ -205,6 +223,7 @@ export async function collectNaverNewsSources(input: {
         sourceId,
         externalId: `naver:${sha256(item.original_link ?? item.link).slice(0, 32)}`,
         originalUrl: item.original_link ?? item.link,
+        hostedArticleUrl: normalizeHostedArticleUrl(item.link),
         title: clean(item.title),
         excerpt: null,
         author: null,

@@ -40,6 +40,7 @@ export const articleInputSchema = z
     sourceId: identifierSchema,
     externalId: z.string().trim().min(1).max(512).nullable(),
     originalUrl: httpsUrlSchema,
+    hostedArticleUrl: httpsUrlSchema.nullable().optional(),
     title: z.string().trim().min(1).max(500),
     excerpt: nullableShortTextSchema,
     author: z.string().trim().max(300).nullable(),
@@ -87,6 +88,37 @@ export const evidenceItemSchema = z
   })
   .strict();
 
+/**
+ * Private, server-only article text supplied to the model after an explicit
+ * source-use review. It is never part of the public post projection.
+ */
+export const articleModelDocumentSchema = z
+  .object({
+    documentId: identifierSchema,
+    articleId: identifierSchema,
+    sourceId: identifierSchema,
+    evidenceId: identifierSchema,
+    sourceName: z.string().trim().min(1).max(200),
+    title: z.string().trim().min(1).max(500),
+    publishedAt: isoTimestampSchema,
+    contentText: z.string().trim().min(1).max(100_000),
+    contentHash: sha256Schema,
+    fetchedAt: isoTimestampSchema,
+    retentionExpiresAt: isoTimestampSchema,
+    rightsBasisUrl: httpsUrlSchema,
+    termsReviewedAt: isoTimestampSchema,
+  })
+  .strict()
+  .superRefine((document, context) => {
+    if (new Date(document.retentionExpiresAt) <= new Date(document.fetchedAt)) {
+      context.addIssue({
+        code: "custom",
+        path: ["retentionExpiresAt"],
+        message: "원문 보존 만료 시각은 수집 시각보다 뒤여야 합니다.",
+      });
+    }
+  });
+
 export const fetchableSourceUrlSchema = httpsUrlSchema.superRefine(
   (value, context) => {
     const url = new URL(value);
@@ -114,3 +146,4 @@ export const fetchableSourceUrlSchema = httpsUrlSchema.superRefine(
 export type ArticleInput = z.infer<typeof articleInputSchema>;
 export type NormalizedArticle = z.infer<typeof normalizedArticleSchema>;
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
+export type ArticleModelDocument = z.infer<typeof articleModelDocumentSchema>;

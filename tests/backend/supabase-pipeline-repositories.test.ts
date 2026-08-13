@@ -13,6 +13,7 @@ import {
   SupabasePublishReceiptRepository,
   SupabasePublisherRepository,
   SupabaseSourceAttemptRepository,
+  SupabaseArticleFullTextRepository,
 } from "../../src/repositories";
 
 const environment = parseEnvironment({
@@ -33,7 +34,7 @@ const options = {
 };
 
 describe("configured Supabase pipeline repositories", () => {
-  it("일곱 server-only 경계를 네트워크 없이 조립한다", () => {
+  it("server-only 경계를 네트워크 없이 조립한다", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const repositories = createConfiguredSupabasePipelineRepositories(
@@ -50,6 +51,7 @@ describe("configured Supabase pipeline repositories", () => {
       publisher: expect.any(SupabasePublisherRepository),
       publishReceipt: expect.any(SupabasePublishReceiptRepository),
       publicationHistory: expect.any(SupabasePublicationHistoryRepository),
+      articleFullText: expect.any(SupabaseArticleFullTextRepository),
     });
     expect(Object.isFrozen(repositories)).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();

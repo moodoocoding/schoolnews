@@ -18,7 +18,11 @@ import {
   type PostGenerationSemanticEvaluator,
 } from "../../src/pipeline/orchestrator";
 import { GENERATED_POST_PROMPT_VERSION } from "../../src/prompts/generated-post-v2";
-import { validEvidenceItems, validGeneratedPost } from "../fixtures/content/quality";
+import {
+  validArticleDocuments,
+  validEvidenceItems,
+  validGeneratedPost,
+} from "../fixtures/content/quality";
 
 type PrepareInput = Parameters<ModelInvocationLedger["prepare"]>[0];
 type FinalizeInput = Parameters<ModelInvocationLedger["finalize"]>[0];
@@ -36,6 +40,7 @@ const request = () => ({
   attemptNumber: 1 as const,
   purpose: "draft" as const,
   evidenceItems: validEvidenceItems(),
+  articleDocuments: validArticleDocuments(),
   timeoutMs: 1_000,
   maxOutputTokens: 1_200,
   maxPhysicalCalls: 2,
@@ -501,6 +506,7 @@ const semanticRequest = () => ({
       locator,
     }),
   ),
+  articleDocuments: validArticleDocuments(),
   timeoutMs: 1_000,
   maxOutputTokens: 500,
   maxPhysicalCalls: 2,

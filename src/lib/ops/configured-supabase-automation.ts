@@ -14,6 +14,7 @@ import {
   runSupabaseDailyPipeline,
 } from "../../pipeline/orchestrator";
 import type { ConfiguredSupabasePipelineRepositories } from "../../db/supabase/configured-pipeline.repositories";
+import { buildArticleModelDocuments } from "../../repositories";
 
 export const PRODUCTION_GENERATION_BUDGET = Object.freeze({
   maxModelCalls: 4,
@@ -107,6 +108,9 @@ export async function runConfiguredSupabaseAutomation(input: {
       budget: PRODUCTION_GENERATION_BUDGET,
       generatedRoutes: rawRoutes.generatedRoutes,
       semanticRoutes: rawRoutes.semanticRoutes,
+      articleFullText: repositories.articleFullText,
+      buildArticleDocuments: (documents) =>
+        buildArticleModelDocuments(documents),
     },
     collectionConfigurationId: "official-rss-and-naver-metadata-v3",
     previousPostTitles: history.titles,

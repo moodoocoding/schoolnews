@@ -105,7 +105,7 @@ export function createSemanticReviewRequestFingerprint(input: {
   return createHash("sha256")
     .update(
       stableJson({
-        version: "semantic-review-ledger-v1",
+        version: "semantic-review-ledger-v2-fulltext",
         runId: input.runId,
         scoreOutputReference: input.scoreOutputReference,
         routeAttempt: input.routeAttempt,
@@ -115,6 +115,15 @@ export function createSemanticReviewRequestFingerprint(input: {
         attemptNumber: input.request.attemptNumber,
         post: input.request.post,
         evidenceItems: input.request.evidenceItems,
+        articleDocuments: input.request.articleDocuments?.map((document) => ({
+          documentId: document.documentId,
+          articleId: document.articleId,
+          evidenceId: document.evidenceId,
+          contentHash: document.contentHash,
+          retentionExpiresAt: document.retentionExpiresAt,
+          rightsBasisUrl: document.rightsBasisUrl,
+          termsReviewedAt: document.termsReviewedAt,
+        })),
         maxOutputTokens: input.request.maxOutputTokens,
       }),
     )

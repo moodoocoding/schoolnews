@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -55,7 +57,7 @@ const independentSource: SourceRegistryEntry = sourceRegistryEntrySchema.parse({
 
 const limits = {
   maxModelCalls: 4,
-  maxInputTokens: 4_000,
+  maxInputTokens: 20_000,
   maxOutputTokens: 4_000,
   maxEstimatedCostUsd: 0.2,
   maxRunSeconds: 300,
@@ -499,7 +501,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
       ledger,
       budget: {
         maxModelCalls: 4,
-        maxInputTokens: 2_000,
+        maxInputTokens: 20_000,
         maxOutputTokens: 2_000,
         maxEstimatedCostUsd: 0.1,
         maxCallSeconds: 30,
@@ -511,7 +513,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
             providerId: "supabase-fake",
             modelId: "supabase-fake-v1",
           },
-          promptVersion: "generated-post-v6",
+          promptVersion: "generated-post-v7-fulltext",
           reservationPolicyVersion: "fake-reservation-v1",
           reservation: (request: { maxOutputTokens: number }) => ({
             inputTokens: 500,
@@ -536,6 +538,52 @@ function setup(sources: readonly SourceRegistryEntry[]) {
           }),
         },
       ],
+      articleFullText: {
+        getSelected: async (input) => {
+          return input.articleIds.map((articleId) => {
+            const bodyText = `테스트 원문 ${articleId} `.repeat(100).trim();
+            return {
+              articleId,
+              sourceId: "test-source",
+              canonicalUrl: `https://example.test/${articleId}`,
+              finalUrl: `https://example.test/${articleId}`,
+              bodyText,
+              bodySha256: createHash("sha256").update(bodyText).digest("hex"),
+              responseBytes: Buffer.byteLength(bodyText, "utf8"),
+              collectedAt: "2026-08-13T00:00:00.000Z",
+              retentionUntil: "2027-08-14T00:00:00.000Z",
+              permission: {
+                accessReviewedAt: "2026-08-13T00:00:00.000Z",
+                policyReferenceUrls: ["https://example.test/terms"],
+                fullTextUseAllowed: true as const,
+              },
+            };
+            });
+        },
+      },
+      buildArticleDocuments: ({ evidenceItems, fullTexts }) => {
+        const catalog = new Map(fullTexts.map((document) => [document.articleId, document]));
+        const documents = evidenceItems.map((item) => {
+          const document = catalog.get(item.articleId);
+          if (!document) throw new Error("TEST_DOCUMENT_NOT_FOUND");
+          return {
+            documentId: `document:${document.bodySha256.slice(0, 32)}`,
+            articleId: item.articleId,
+            sourceId: item.sourceId,
+            evidenceId: item.evidenceId,
+            sourceName: item.sourceName,
+            title: item.title,
+            publishedAt: item.publishedAt,
+            contentText: document.bodyText,
+            contentHash: document.bodySha256,
+            fetchedAt: document.collectedAt,
+            retentionExpiresAt: document.retentionUntil,
+            rightsBasisUrl: document.permission.policyReferenceUrls[0]!,
+            termsReviewedAt: document.permission.accessReviewedAt,
+          };
+        });
+        return documents;
+      },
     },
     publisher: {
       publish: async (input: SupabasePublishInput) => {

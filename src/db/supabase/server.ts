@@ -3,6 +3,7 @@ import "server-only";
 export * from "./configured-daily-run.repository";
 export * from "./configured-pipeline.repositories";
 export * from "./configured-write.repositories";
+export * from "./article-full-text.data-source";
 export * from "./content-persistence.data-source";
 export * from "./daily-run.data-source";
 export * from "./model-invocation.data-source";

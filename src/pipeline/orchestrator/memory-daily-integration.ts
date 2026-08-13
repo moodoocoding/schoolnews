@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type {
+  ArticleModelDocument,
+  EvidenceItem,
   GenerationBudget,
   GenerationUsage,
   SourceRegistryEntry,
@@ -54,6 +56,9 @@ interface MemoryDailyGenerationConfiguration {
   provider: GeneratedPostProvider;
   semanticEvaluator: PostGenerationSemanticEvaluator;
   budget: GenerationBudget;
+  articleDocumentsForEvidence?: (
+    evidenceItems: readonly EvidenceItem[],
+  ) => readonly ArticleModelDocument[];
 }
 
 export interface CreateMemoryDailyStagesOptions {
@@ -167,10 +172,11 @@ export function createMemoryDailyStages(
   if (
     options.generation &&
     (typeof options.generation.provider?.generate !== "function" ||
-      typeof options.generation.semanticEvaluator?.evaluate !== "function")
+      typeof options.generation.semanticEvaluator?.evaluate !== "function" ||
+      typeof options.generation.articleDocumentsForEvidence !== "function")
   ) {
     throw new TypeError(
-      "생성 설정에는 생성 공급자와 독립 의미 평가기가 모두 필요합니다.",
+      "생성 설정에는 생성 공급자, 독립 의미 평가기, 기사 원문 공급자가 모두 필요합니다.",
     );
   }
   const sources = [...(options.sources ?? RSS_SOURCE_REGISTRY)].sort((left, right) =>
@@ -534,16 +540,26 @@ export function createMemoryDailyStages(
           usage: EMPTY_USAGE,
         });
       }
+      const selectedValue = selected.artifact.value;
+      const selectedEvidenceItems = selectedValue.evidenceItems;
+      const selectedCandidate = selectedValue.candidate!;
       const postGeneration =
         storedResult?.value ??
-        (await runPostGeneration({
-          provider: options.generation!.provider,
-          semanticEvaluator: options.generation!.semanticEvaluator,
-          evidenceItems: selected.artifact.value.evidenceItems,
-          evidencePolicy: selected.artifact.value.candidate.evidencePolicy,
-          budget: options.generation!.budget,
-          abortSignal: context.signal,
-        }));
+        (await (async () => {
+          const articleDocuments =
+            options.generation!.articleDocumentsForEvidence?.(
+              selectedEvidenceItems,
+            ) ?? [];
+          return runPostGeneration({
+            provider: options.generation!.provider,
+            semanticEvaluator: options.generation!.semanticEvaluator,
+            evidenceItems: selectedEvidenceItems,
+            articleDocuments,
+            evidencePolicy: selectedCandidate.evidencePolicy,
+            budget: options.generation!.budget,
+            abortSignal: context.signal,
+          });
+        })());
       const mapping = mapPostGenerationForDailyStage(postGeneration);
       if (mapping.disposition === "failed") {
         // Provider failures are not persisted without a fenced call ledger.

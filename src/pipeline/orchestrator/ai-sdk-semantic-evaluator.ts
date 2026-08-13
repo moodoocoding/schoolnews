@@ -8,6 +8,7 @@ import {
 } from "ai";
 
 import {
+  articleModelDocumentSchema,
   generatedPostSchema,
   modelCallAuditSchema,
   semanticReviewSchema,
@@ -51,6 +52,12 @@ export class AiSdkSemanticEvaluator
     input: Parameters<PostGenerationSemanticEvaluator["evaluate"]>[0],
   ): Promise<PostGenerationSemanticEvaluationResult> {
     generatedPostSchema.parse(input.post);
+    const articleDocuments = (input.articleDocuments ?? []).map((document) =>
+      articleModelDocumentSchema.parse(document),
+    );
+    if (articleDocuments.length === 0) {
+      throw new GenerationProviderError("INVALID_GENERATION_INPUT");
+    }
     const now = this.#options.now ?? (() => new Date());
     const startedAt = now();
     const timeoutSignal = AbortSignal.timeout(input.timeoutMs);
@@ -96,7 +103,18 @@ export class AiSdkSemanticEvaluator
         model: this.#options.model,
         instructions:
           "제공된 근거와 게시물의 의미 일치만 심사하세요. 외부 지식을 추가하지 말고, 근거 없는 주장·모순·인과 과장·홍보 표현을 보수적으로 표시하세요.",
-        prompt: JSON.stringify({ post: input.post, evidence: input.evidenceItems }),
+        prompt: JSON.stringify({
+          post: input.post,
+          evidence: input.evidenceItems,
+          articleDocuments: articleDocuments.map((document) => ({
+            documentId: document.documentId,
+            evidenceId: document.evidenceId,
+            sourceName: document.sourceName,
+            title: document.title,
+            publishedAt: document.publishedAt,
+            contentText: document.contentText,
+          })),
+        }),
         output: Output.object({ schema: semanticReviewSchema }),
         maxOutputTokens: input.maxOutputTokens,
         maxRetries: 0,

@@ -6,7 +6,11 @@ import {
   SEMANTIC_EVALUATOR_PROMPT_VERSION,
 } from "../../src/pipeline/orchestrator";
 import { GenerationProviderError } from "../../src/pipeline/generation";
-import { validEvidenceItems, validGeneratedPost } from "../fixtures/content/quality";
+import {
+  validArticleDocuments,
+  validEvidenceItems,
+  validGeneratedPost,
+} from "../fixtures/content/quality";
 
 function semanticRequest() {
   return {
@@ -41,6 +45,7 @@ function semanticRequest() {
         locator,
       }),
     ),
+    articleDocuments: validArticleDocuments(),
     timeoutMs: 1_000,
     maxOutputTokens: 500,
     maxPhysicalCalls: 1,

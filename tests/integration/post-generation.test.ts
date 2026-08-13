@@ -14,6 +14,7 @@ import {
   type PostGenerationSemanticEvaluator,
 } from "../../src/pipeline/orchestrator";
 import {
+  validArticleDocuments,
   validEvidenceItems,
   validGeneratedPost,
 } from "../fixtures/content/quality";
@@ -67,6 +68,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -95,6 +97,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -122,6 +125,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -141,6 +145,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: [validEvidenceItems()[0]],
+      articleDocuments: [validArticleDocuments()[0]],
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -160,6 +165,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -181,6 +187,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -210,6 +217,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider: fake(validGeneratedPost()),
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator: expensiveEvaluator,
@@ -234,6 +242,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider: fake(validGeneratedPost()),
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget: { ...budget, maxModelCalls: 1 },
       semanticEvaluator: countingEvaluator,
@@ -260,6 +269,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
       semanticEvaluator,
@@ -280,6 +290,7 @@ describe("게시물 생성 오케스트레이터", () => {
     const result = await runPostGeneration({
       provider,
       evidenceItems: validEvidenceItems(),
+      articleDocuments: validArticleDocuments(),
       evidencePolicy: "primary_plus_independent",
       budget,
     });

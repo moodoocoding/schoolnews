@@ -1,4 +1,5 @@
 import type {
+  ArticleModelDocument,
   EvidenceItem,
   GeneratedPost,
   GenerationPurpose,
@@ -10,6 +11,7 @@ export interface GeneratedPostGenerationRequest {
   attemptNumber: 1 | 2;
   purpose: GenerationPurpose;
   evidenceItems: readonly EvidenceItem[];
+  articleDocuments?: readonly ArticleModelDocument[];
   revisionReasons?: readonly string[] | null;
   timeoutMs: number;
   maxOutputTokens: number;

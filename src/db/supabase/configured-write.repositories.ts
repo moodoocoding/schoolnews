@@ -10,6 +10,7 @@ import {
   SupabasePublishReceiptRepository,
   SupabasePublisherRepository,
   SupabaseSourceAttemptRepository,
+  SupabaseArticleFullTextRepository,
   type SupabasePipelineWorkspaceWriteAuthorityProvider,
   type SupabasePublicationPostMapper,
 } from "../../repositories";
@@ -41,6 +42,10 @@ import {
   createSupabasePublicationHistoryRpcDataSource,
   SupabasePublicationHistoryConfigurationError,
 } from "./publication-history.data-source";
+import {
+  createSupabaseArticleFullTextRpcDataSource,
+  SupabaseArticleFullTextConfigurationError,
+} from "./article-full-text.data-source";
 
 function requireServerConfig(environment: Environment): {
   projectUrl: string;
@@ -173,5 +178,19 @@ export function createConfiguredSupabasePublicationHistoryRepository(
   }
   return new SupabasePublicationHistoryRepository(
     createSupabasePublicationHistoryRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabaseArticleFullTextRepository(
+  environment: Environment,
+): SupabaseArticleFullTextRepository {
+  let config: ReturnType<typeof requireServerConfig>;
+  try {
+    config = requireServerConfig(environment);
+  } catch {
+    throw new SupabaseArticleFullTextConfigurationError();
+  }
+  return new SupabaseArticleFullTextRepository(
+    createSupabaseArticleFullTextRpcDataSource(config),
   );
 }

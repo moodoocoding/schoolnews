@@ -1,6 +1,7 @@
 import {
   generationBudgetSchema,
   modelCallAuditSchema,
+  type ArticleModelDocument,
   type EvidenceItem,
   type GeneratedPost,
   type GenerationBudget,
@@ -40,6 +41,7 @@ export type PostGenerationFailureCode =
 export interface RunPostGenerationInput {
   provider: GeneratedPostProvider;
   evidenceItems: readonly EvidenceItem[];
+  articleDocuments?: readonly ArticleModelDocument[];
   evidencePolicy: EvidencePolicy;
   budget: GenerationBudget;
   allowAuthoritativeSingleSource?: boolean;
@@ -52,6 +54,7 @@ export interface PostGenerationSemanticEvaluator {
     attemptNumber: 1 | 2;
     post: GeneratedPost;
     evidenceItems: readonly PostGenerationSemanticEvidence[];
+    articleDocuments?: readonly ArticleModelDocument[];
     timeoutMs: number;
     maxOutputTokens: number;
     maxPhysicalCalls?: number;
@@ -314,6 +317,7 @@ export async function runPostGeneration(
         attemptNumber,
         purpose: attemptNumber === 1 ? "draft" : "revision",
         evidenceItems: input.evidenceItems,
+        articleDocuments: input.articleDocuments,
         revisionReasons:
           attemptNumber === 2 && lastQuality
             ? revisionReasons(lastQuality)
@@ -440,6 +444,7 @@ export async function runPostGeneration(
           attemptNumber,
           post: generated.post,
           evidenceItems: semanticEvidenceView(input.evidenceItems),
+          articleDocuments: input.articleDocuments,
           timeoutMs: budget.maxCallSeconds * 1_000,
           maxOutputTokens: evaluatorOutputTokens,
           maxPhysicalCalls: budget.maxModelCalls - usage.modelCalls,

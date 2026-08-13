@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -7,7 +9,10 @@ import type {
   SourceCollectionOutcome,
   SourceRegistryEntry,
 } from "../../src/contracts";
-import { sourceRegistryEntrySchema } from "../../src/contracts";
+import {
+  articleModelDocumentSchema,
+  sourceRegistryEntrySchema,
+} from "../../src/contracts";
 import { RSS_SOURCE_REGISTRY } from "../../src/pipeline/collectors";
 import { DeterministicFakeGeneratedPostProvider } from "../../src/pipeline/generation";
 import {
@@ -41,7 +46,7 @@ const independentSource: SourceRegistryEntry = sourceRegistryEntrySchema.parse({
 
 const limits = {
   maxModelCalls: 4,
-  maxInputTokens: 4_000,
+  maxInputTokens: 20_000,
   maxOutputTokens: 2_000,
   maxEstimatedCostUsd: 0.2,
   maxRunSeconds: 300,
@@ -196,6 +201,28 @@ function generation(provider: DeterministicFakeGeneratedPostProvider, evaluatorC
     configurationId: "memory-fake-generation-v1",
     provider,
     semanticEvaluator: semanticEvaluator(evaluatorCalls),
+    articleDocumentsForEvidence: (items: readonly EvidenceItem[]) =>
+      items.map((item) => {
+        const contentText = `${item.articleId} ${item.passage} 디지털 교육 정책과 현장 적용 조건을 확인하기 위한 테스트 원문입니다. `.repeat(20).trim();
+        const contentHash = createHash("sha256")
+          .update(contentText)
+          .digest("hex");
+        return articleModelDocumentSchema.parse({
+          documentId: `document:${contentHash.slice(0, 32)}`,
+          articleId: item.articleId,
+          sourceId: item.sourceId,
+          evidenceId: item.evidenceId,
+          sourceName: item.sourceName,
+          title: item.title,
+          publishedAt: item.publishedAt,
+          contentText,
+          contentHash,
+          fetchedAt: "2026-08-13T00:00:00.000Z",
+          retentionExpiresAt: "2027-08-13T00:00:00.000Z",
+          rightsBasisUrl: "https://example.test/terms",
+          termsReviewedAt: "2026-08-13T00:00:00.000Z",
+        });
+      }),
     budget: {
       maxModelCalls: 4,
       maxInputTokens: 2_000,
@@ -306,7 +333,6 @@ describe("M5 메모리 일일 파이프라인 통합", () => {
       runDate: "2026-08-13",
       ownerId: "memory-e2e-selected",
     });
-
     expect(result.status === "executed" && result.journal.run.status).toBe(
       "succeeded_without_publish",
     );

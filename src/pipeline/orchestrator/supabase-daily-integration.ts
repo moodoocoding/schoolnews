@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type {
+  ArticleModelDocument,
+  EvidenceItem,
   GenerationBudget,
   GenerationUsage,
   SourceCollectionOutcome,
@@ -21,6 +23,7 @@ import {
   type SupabasePublishReceiptRepository,
   type SupabasePublisherRepository,
   type SupabaseSourceAttemptRepository,
+  type SupabaseArticleFullTextRepository,
 } from "../../repositories";
 import {
   FallbackGeneratedPostProvider,
@@ -103,6 +106,13 @@ export interface SupabaseDailyGenerationConfiguration {
   budget: GenerationBudget;
   generatedRoutes: readonly SupabaseDailyGeneratedRoute[];
   semanticRoutes: readonly SupabaseDailySemanticRoute[];
+  articleFullText?: Pick<SupabaseArticleFullTextRepository, "getSelected">;
+  buildArticleDocuments?: (input: {
+    evidenceItems: readonly EvidenceItem[];
+    fullTexts: Awaited<
+      ReturnType<SupabaseArticleFullTextRepository["getSelected"]>
+    >;
+  }) => ArticleModelDocument[];
 }
 
 type SupabaseDailyWorkspace = Pick<
@@ -356,6 +366,8 @@ function validateOptions(options: Readonly<CreateSupabaseDailyStagesOptions>) {
         generation.generatedRoutes.length > 2 ||
         generation.semanticRoutes.length < 1 ||
         generation.semanticRoutes.length > 2 ||
+        generation.articleFullText === undefined ||
+        generation.buildArticleDocuments === undefined ||
         generation.generatedRoutes.some(
           (route) =>
             typeof route.provider?.generate !== "function" ||
@@ -860,6 +872,17 @@ export function createSupabaseDailyStages(
 
       let postGeneration = storedResult?.value;
       if (!postGeneration) {
+        const evidenceItems = selected.artifact.value.evidenceItems;
+        const fullTexts = await generation.articleFullText!.getSelected({
+          ...authority(context),
+          scoreOutputReference: selected.outputReference,
+          evidenceIds: evidenceItems.map((item) => item.evidenceId),
+          articleIds: evidenceItems.map((item) => item.articleId),
+        });
+        const articleDocuments = generation.buildArticleDocuments!({
+          evidenceItems,
+          fullTexts,
+        });
         const invocationAuthority = authority(context);
         const provider = new FallbackGeneratedPostProvider(
           generation.generatedRoutes.map(
@@ -896,6 +919,7 @@ export function createSupabaseDailyStages(
           provider,
           semanticEvaluator,
           evidenceItems: selected.artifact.value.evidenceItems,
+          articleDocuments,
           evidencePolicy: selected.artifact.value.candidate.evidencePolicy,
           budget: generation.budget,
           abortSignal: context.signal,

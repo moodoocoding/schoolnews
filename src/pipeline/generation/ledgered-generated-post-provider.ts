@@ -190,7 +190,7 @@ export function createGenerationRequestFingerprint(input: {
   return createHash("sha256")
     .update(
       stableJson({
-        version: "generated-post-ledger-v1",
+        version: "generated-post-ledger-v2-fulltext",
         runId: input.runId,
         scoreOutputReference: input.scoreOutputReference,
         routeAttempt: input.routeAttempt,
@@ -200,6 +200,15 @@ export function createGenerationRequestFingerprint(input: {
         attemptNumber: input.request.attemptNumber,
         purpose: input.request.purpose,
         evidenceItems: input.request.evidenceItems,
+        articleDocuments: input.request.articleDocuments?.map((document) => ({
+          documentId: document.documentId,
+          articleId: document.articleId,
+          evidenceId: document.evidenceId,
+          contentHash: document.contentHash,
+          retentionExpiresAt: document.retentionExpiresAt,
+          rightsBasisUrl: document.rightsBasisUrl,
+          termsReviewedAt: document.termsReviewedAt,
+        })),
         revisionReasons: input.request.revisionReasons ?? null,
         maxOutputTokens: input.request.maxOutputTokens,
       }),

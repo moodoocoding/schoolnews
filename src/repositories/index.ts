@@ -106,6 +106,19 @@ export {
   SUPABASE_SOURCE_ATTEMPT_RPC_NAME,
 } from "./supabase-source-attempt.repository";
 export {
+  buildArticleModelDocuments,
+  SupabaseArticleFullTextError,
+  SupabaseArticleFullTextRepository,
+  SUPABASE_ARTICLE_FULL_TEXT_RPC_NAMES,
+} from "./supabase-article-full-text.repository";
+export type {
+  PersistArticleFullTextsInput,
+  StoredArticleFullText,
+  SupabaseArticleFullTextRpcDataSource,
+  SupabaseArticleFullTextRpcName,
+  SupabaseArticleFullTextRpcResult,
+} from "./supabase-article-full-text.repository";
+export {
   SupabasePublicationHistoryError,
   SupabasePublicationHistoryRepository,
   SUPABASE_PUBLICATION_HISTORY_RPC_NAME,

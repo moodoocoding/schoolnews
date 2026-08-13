@@ -134,6 +134,7 @@ export function reserveGeminiSemanticReviewRequest(
   const payload = JSON.stringify({
     post: request.post,
     evidence: request.evidenceItems,
+    articleDocuments: request.articleDocuments,
   });
   return reservationForPayload(payload, request.maxOutputTokens);
 }

@@ -1,4 +1,5 @@
 import {
+  articleModelDocumentSchema,
   evidenceItemSchema,
   generatedPostSchema,
   generationPurposeSchema,
@@ -6,12 +7,16 @@ import {
   modelCallAuditSchema,
   modelUsageSchema,
   type EvidenceItem,
+  type ArticleModelDocument,
   type GeneratedPost,
   type ModelCallAudit,
   type ModelUsage,
 } from "../../contracts";
 import { GENERATED_POST_PROMPT_VERSION } from "../../prompts/generated-post-v2";
-import { assertEvidenceSafeForModel } from "../../prompts/prompt-data-safety";
+import {
+  assertArticleDocumentsSafeForModel,
+  assertEvidenceSafeForModel,
+} from "../../prompts/prompt-data-safety";
 import { GenerationProviderError } from "./errors";
 import type {
   GeneratedPostGenerationRequest,
@@ -53,6 +58,7 @@ export function validateGenerationRequest(
         request.maxPhysicalCalls >= 1 &&
         request.maxPhysicalCalls <= 4));
   const evidenceItems: EvidenceItem[] = [];
+  const articleDocuments: ArticleModelDocument[] = [];
 
   for (const item of request.evidenceItems ?? []) {
     const parsed = evidenceItemSchema.safeParse(item);
@@ -62,9 +68,36 @@ export function validateGenerationRequest(
     evidenceItems.push(parsed.data);
   }
 
+  for (const document of request.articleDocuments ?? []) {
+    const parsed = articleModelDocumentSchema.safeParse(document);
+    if (!parsed.success) {
+      throw new GenerationProviderError("INVALID_GENERATION_INPUT");
+    }
+    articleDocuments.push(parsed.data);
+  }
+
   const evidenceIds = evidenceItems.map((item) => item.evidenceId);
   const hasDuplicateEvidenceId =
     new Set(evidenceIds).size !== evidenceIds.length;
+  const documentIds = articleDocuments.map((document) => document.documentId);
+  const documentEvidenceIds = articleDocuments.map(
+    (document) => document.evidenceId,
+  );
+  const evidenceCatalog = new Set(evidenceIds);
+  const documentEvidenceCatalog = new Set(documentEvidenceIds);
+  const hasInvalidDocuments =
+    articleDocuments.length === 0 ||
+    new Set(documentIds).size !== documentIds.length ||
+    documentEvidenceCatalog.size !== documentEvidenceIds.length ||
+    articleDocuments.some(
+      (document) =>
+        !evidenceCatalog.has(document.evidenceId) ||
+        evidenceItems.find((item) => item.evidenceId === document.evidenceId)
+          ?.articleId !== document.articleId,
+    ) ||
+    evidenceItems.some(
+      (item) => !documentEvidenceCatalog.has(item.evidenceId),
+    );
   const revisionReasons = Array.isArray(request.revisionReasons)
     ? request.revisionReasons.map((reason) =>
         typeof reason === "string" ? reason.trim() : "",
@@ -86,6 +119,7 @@ export function validateGenerationRequest(
     !validLimits ||
     evidenceItems.length === 0 ||
     hasDuplicateEvidenceId ||
+    hasInvalidDocuments ||
     !validRevisionReasons
   ) {
     throw new GenerationProviderError("INVALID_GENERATION_INPUT");
@@ -93,6 +127,7 @@ export function validateGenerationRequest(
 
   try {
     assertEvidenceSafeForModel(evidenceItems);
+    assertArticleDocumentsSafeForModel(articleDocuments, evidenceItems);
   } catch (error) {
     throw new GenerationProviderError("INVALID_GENERATION_INPUT", {
       cause: error,
@@ -107,6 +142,7 @@ export function validateGenerationRequest(
     attemptNumber: request.attemptNumber,
     purpose: purpose.data,
     evidenceItems,
+    articleDocuments,
     revisionReasons: revisionReasons ?? null,
     timeoutMs: request.timeoutMs,
     maxOutputTokens: request.maxOutputTokens,

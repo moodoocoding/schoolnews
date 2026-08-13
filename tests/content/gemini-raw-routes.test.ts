@@ -23,7 +23,11 @@ import {
   type SupabaseDailySemanticRoute,
 } from "../../src/pipeline/orchestrator";
 import { GENERATED_POST_PROMPT_VERSION } from "../../src/prompts";
-import { validEvidenceItems, validGeneratedPost } from "../fixtures/content/quality";
+import {
+  validArticleDocuments,
+  validEvidenceItems,
+  validGeneratedPost,
+} from "../fixtures/content/quality";
 
 function modelResult(output: unknown, modelId: string) {
   return {
@@ -52,6 +56,7 @@ function generationRequest() {
     attemptNumber: 1 as const,
     purpose: "draft" as const,
     evidenceItems: validEvidenceItems(),
+    articleDocuments: validArticleDocuments(),
     timeoutMs: 1_000,
     maxOutputTokens: 1_200,
     maxPhysicalCalls: 2,
@@ -91,6 +96,7 @@ function semanticRequest() {
         locator,
       }),
     ),
+    articleDocuments: validArticleDocuments(),
     timeoutMs: 1_000,
     maxOutputTokens: 500,
     maxPhysicalCalls: 2,
