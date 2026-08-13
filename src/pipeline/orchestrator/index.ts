@@ -6,6 +6,7 @@ export * from "./generation-budget";
 export * from "./ledgered-semantic-evaluator";
 export * from "./memory-daily-integration";
 export * from "./publication-mapping";
+export * from "./publication-cadence";
 export * from "./run-news-ingestion";
 export * from "./run-post-generation";
 export * from "./run-daily-pipeline";

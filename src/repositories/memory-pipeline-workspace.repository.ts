@@ -99,6 +99,7 @@ const newsIngestionResultSchema: z.ZodType<NewsIngestionResult> = z
     collectedCount: z.number().int().min(0),
     normalizedCount: z.number().int().min(0),
     deduplicatedCount: z.number().int().min(0),
+    carriedCount: z.number().int().min(0).optional(),
     storage: articleUpsertResultSchema,
     articles: z.array(normalizedArticleSchema),
     evidenceItems: z.array(evidenceItemSchema),
@@ -128,7 +129,8 @@ const newsIngestionResultSchema: z.ZodType<NewsIngestionResult> = z
     if (
       result.normalizedCount !== result.collectedCount ||
       result.deduplicatedCount > result.normalizedCount ||
-      result.articles.length !== result.deduplicatedCount ||
+      result.articles.length !==
+        result.deduplicatedCount + (result.carriedCount ?? 0) ||
       result.candidates.length !== result.deduplicatedCount
     ) {
       context.addIssue({
@@ -191,10 +193,7 @@ const newsIngestionResultSchema: z.ZodType<NewsIngestionResult> = z
     const candidateArticleIds = result.candidates.map(
       (candidate) => candidate.articleId,
     );
-    if (
-      candidateArticleIds.length !== articleIds.length ||
-      candidateArticleIds.some((articleId) => !articleIdSet.has(articleId))
-    ) {
+    if (candidateArticleIds.some((articleId) => !articleIdSet.has(articleId))) {
       context.addIssue({
         code: "custom",
         path: ["candidates"],

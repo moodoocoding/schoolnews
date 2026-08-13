@@ -34,6 +34,19 @@ export const PRODUCTION_RUN_LIMITS = Object.freeze({
   maxRunSeconds: 240,
 });
 
+export const CADENCE_BOOTSTRAP_RUN_DATE = "2026-08-14";
+
+function currentKstDate(): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 function createRepositories(environment: Environment) {
   const repositories: ConfiguredSupabasePipelineRepositories =
     createConfiguredSupabasePipelineRepositories(environment, {
@@ -85,6 +98,7 @@ export async function runConfiguredSupabaseAutomation(input: {
     workspace: repositories.workspace,
     contentPersistence: repositories.contentPersistence,
     sourceAttempt: repositories.sourceAttempt,
+    editorialMaterials: repositories.editorialMaterials,
     publisher: repositories.publisher,
     publishReceipt: repositories.publishReceipt,
     sources,
@@ -110,11 +124,16 @@ export async function runConfiguredSupabaseAutomation(input: {
       semanticRoutes: rawRoutes.semanticRoutes,
       articleFullText: repositories.articleFullText,
       buildArticleDocuments: (documents) =>
-        buildArticleModelDocuments(documents),
+        buildArticleModelDocuments({
+          ...documents,
+          apiSummarySources: documents.sources,
+        }),
     },
-    collectionConfigurationId: "official-rss-and-naver-metadata-v3",
+    collectionConfigurationId: "official-rss-and-naver-summaries-v4",
     previousPostTitles: history.titles,
     previousContentFingerprints: history.contentFingerprints,
+    latestPublicationDateKst: history.latestPublicationDateKst,
+    forceCadenceBootstrap: currentKstDate() === CADENCE_BOOTSTRAP_RUN_DATE,
     limits: PRODUCTION_RUN_LIMITS,
     ownerId: input.ownerId,
     abortSignal: input.abortSignal,

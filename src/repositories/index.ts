@@ -44,6 +44,15 @@ export {
   SUPABASE_CONTENT_PERSISTENCE_RPC_NAMES,
   supabaseContentPersistenceErrorCodes,
 } from "./supabase-content-persistence.repository";
+export {
+  SupabaseEditorialMaterialsError,
+  SupabaseEditorialMaterialsRepository,
+  SUPABASE_EDITORIAL_MATERIALS_RPC_NAME,
+} from "./supabase-editorial-materials.repository";
+export type {
+  SupabaseEditorialMaterials,
+  SupabaseEditorialMaterialsRpcDataSource,
+} from "./supabase-editorial-materials.repository";
 export type {
   SupabaseArticleIdMapping,
   SupabaseCollectPersistenceInput,

@@ -24,6 +24,7 @@ import {
   type SupabasePublisherRepository,
   type SupabaseSourceAttemptRepository,
   type SupabaseArticleFullTextRepository,
+  type SupabaseEditorialMaterialsRepository,
 } from "../../repositories";
 import {
   FallbackGeneratedPostProvider,
@@ -39,15 +40,21 @@ import {
   NewsIngestionAbortedError,
   runNewsIngestion,
   type RunNewsIngestionOptions,
+  type NewsIngestionResult,
 } from "./run-news-ingestion";
 import {
   DAILY_TOPIC_SELECTION_VERSION,
   selectDailyTopic,
 } from "./select-daily-topic";
 import {
+  EDITORIAL_ROLLING_WINDOW_DAYS,
   EDITORIAL_SOURCE_DATE_VERSION,
-  selectEditorialSourceDateMaterials,
+  selectEditorialWindowMaterials,
 } from "./editorial-source-date";
+import {
+  decidePublicationCadence,
+  PUBLICATION_CADENCE_VERSION,
+} from "./publication-cadence";
 import {
   POST_GENERATION_PIPELINE_VERSION,
   runPostGeneration,
@@ -112,6 +119,7 @@ export interface SupabaseDailyGenerationConfiguration {
     fullTexts: Awaited<
       ReturnType<SupabaseArticleFullTextRepository["getSelected"]>
     >;
+    sources: readonly SourceRegistryEntry[];
   }) => ArticleModelDocument[];
 }
 
@@ -148,6 +156,9 @@ export interface CreateSupabaseDailyStagesOptions {
   collectionConfigurationId?: string;
   previousPostTitles?: readonly string[];
   previousContentFingerprints?: readonly string[];
+  latestPublicationDateKst?: string | null;
+  forceCadenceBootstrap?: boolean;
+  editorialMaterials?: Pick<SupabaseEditorialMaterialsRepository, "getRolling">;
 }
 
 export interface RunSupabaseDailyPipelineOptions
@@ -317,6 +328,36 @@ function captureOnlyArticleRepository() {
   };
 }
 
+function carryRollingMaterials(
+  result: Readonly<NewsIngestionResult>,
+  historical: Readonly<{
+    articles: Readonly<NewsIngestionResult["articles"]>;
+    evidenceItems: Readonly<NewsIngestionResult["evidenceItems"]>;
+  }>,
+  allowedSourceIds: ReadonlySet<string>,
+): NewsIngestionResult {
+  const currentArticleIds = new Set(result.articles.map((article) => article.articleId));
+  const carriedArticles = historical.articles.filter(
+    (article) =>
+      allowedSourceIds.has(article.sourceId) &&
+      !currentArticleIds.has(article.articleId),
+  );
+  const articleById = new Map(
+    [...carriedArticles, ...result.articles].map((article) => [article.articleId, article]),
+  );
+  const evidenceById = new Map(
+    [...historical.evidenceItems, ...result.evidenceItems]
+      .filter((item) => articleById.has(item.articleId))
+      .map((item) => [item.evidenceId, item]),
+  );
+  return {
+    ...structuredClone(result),
+    carriedCount: carriedArticles.length,
+    articles: [...articleById.values()],
+    evidenceItems: [...evidenceById.values()],
+  };
+}
+
 function tooSoonOutcome(source: SourceRegistryEntry): SourceCollectionOutcome {
   const now = new Date().toISOString();
   return sourceCollectionOutcomeSchema.parse({
@@ -429,6 +470,9 @@ export function createSupabaseDailyStages(
   const scoreConfigurationFingerprint = fingerprint({
     version: DAILY_TOPIC_SELECTION_VERSION,
     editorialSourceDateVersion: EDITORIAL_SOURCE_DATE_VERSION,
+    publicationCadenceVersion: PUBLICATION_CADENCE_VERSION,
+    latestPublicationDateKst: options.latestPublicationDateKst ?? null,
+    forceCadenceBootstrap: options.forceCadenceBootstrap === true,
     sources,
     previousPostTitles,
     previousContentFingerprints,
@@ -513,6 +557,27 @@ export function createSupabaseDailyStages(
           false,
         );
       }
+      const historical = options.editorialMaterials
+        ? await options.editorialMaterials.getRolling({
+            runDate: context.runDate,
+            windowDays: EDITORIAL_ROLLING_WINDOW_DAYS,
+          })
+        : { articles: [], evidenceItems: [] };
+      const historicalSourceIds = new Set(
+        historical.articles.map((article) => article.sourceId),
+      );
+      if (
+        historicalSourceIds.size > 0 &&
+        historicalSourceIds.size !==
+          sources.filter((source) => historicalSourceIds.has(source.sourceId)).length
+      ) {
+        throw new DailyStepError("INVALID_SOURCE_DATA", false);
+      }
+      const resultWithHistory = carryRollingMaterials(
+        result,
+        historical,
+        new Set(sources.map((source) => source.sourceId)),
+      );
       const writeInput = {
         runId: context.runId,
         stage: "collect" as const,
@@ -520,7 +585,7 @@ export function createSupabaseDailyStages(
         parentOutputReferences: [],
         artifact: {
           kind: "news_ingestion" as const,
-          value: result,
+          value: resultWithHistory,
         },
       };
       const descriptor = createSupabasePipelineArtifactDescriptor(writeInput);
@@ -528,8 +593,8 @@ export function createSupabaseDailyStages(
         await options.contentPersistence.persistCollectedContent({
           ...authority(context),
           sources,
-          articles: result.articles,
-          evidenceItems: result.evidenceItems,
+          articles: resultWithHistory.articles,
+          evidenceItems: resultWithHistory.evidenceItems,
           artifact: persistedArtifact(descriptor),
         });
       } catch (error) {
@@ -640,8 +705,14 @@ export function createSupabaseDailyStages(
             };
       }
 
-      const editorialMaterials = selectEditorialSourceDateMaterials({
+      const cadence = decidePublicationCadence({
         runDate: context.runDate,
+        latestPublicationDateKst: options.latestPublicationDateKst ?? null,
+        forceBootstrap: options.forceCadenceBootstrap,
+      });
+      const editorialMaterials = selectEditorialWindowMaterials({
+        runDate: context.runDate,
+        windowDays: cadence.candidateWindowDays,
         articles: collected.artifact.value.articles,
         evidenceItems: collected.artifact.value.evidenceItems,
       });
@@ -651,6 +722,7 @@ export function createSupabaseDailyStages(
         sources,
         previousPostTitles,
         previousContentFingerprints,
+        publicationMode: cadence.forceBestCandidate ? "deadline" : "immediate",
       });
       const artifact: SupabasePipelineWorkspaceArtifact =
         selection.status === "none"
@@ -685,11 +757,11 @@ export function createSupabaseDailyStages(
           await options.contentPersistence.persistSelectedTopic({
             ...authority(context),
             topicTitle: topicTitle(
-              collected.artifact.value.articles,
+              editorialMaterials.articles,
               selection.candidate.articleIds,
             ),
             candidate: selection.candidate,
-            articles: collected.artifact.value.articles,
+            articles: editorialMaterials.articles,
             articleIdMapping: selection.candidate.articleIds.map((articleId) => ({
               inputArticleId: articleId,
               storedArticleId: articleId,
@@ -873,15 +945,21 @@ export function createSupabaseDailyStages(
       let postGeneration = storedResult?.value;
       if (!postGeneration) {
         const evidenceItems = selected.artifact.value.evidenceItems;
-        const fullTexts = await generation.articleFullText!.getSelected({
-          ...authority(context),
-          scoreOutputReference: selected.outputReference,
-          evidenceIds: evidenceItems.map((item) => item.evidenceId),
-          articleIds: evidenceItems.map((item) => item.articleId),
-        });
+        const usesOnlyApiSummaries = evidenceItems.every(
+          (item) => item.locator === "뉴스 검색 API 요약",
+        );
+        const fullTexts = usesOnlyApiSummaries
+          ? []
+          : await generation.articleFullText!.getSelected({
+              ...authority(context),
+              scoreOutputReference: selected.outputReference,
+              evidenceIds: evidenceItems.map((item) => item.evidenceId),
+              articleIds: evidenceItems.map((item) => item.articleId),
+            });
         const articleDocuments = generation.buildArticleDocuments!({
           evidenceItems,
           fullTexts,
+          sources,
         });
         const invocationAuthority = authority(context);
         const provider = new FallbackGeneratedPostProvider(

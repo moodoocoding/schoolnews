@@ -11,6 +11,7 @@ import {
   SupabasePublisherRepository,
   SupabaseSourceAttemptRepository,
   SupabaseArticleFullTextRepository,
+  SupabaseEditorialMaterialsRepository,
   type SupabasePipelineWorkspaceWriteAuthorityProvider,
   type SupabasePublicationPostMapper,
 } from "../../repositories";
@@ -46,6 +47,7 @@ import {
   createSupabaseArticleFullTextRpcDataSource,
   SupabaseArticleFullTextConfigurationError,
 } from "./article-full-text.data-source";
+import { createSupabaseEditorialMaterialsRpcDataSource } from "./editorial-materials.data-source";
 
 function requireServerConfig(environment: Environment): {
   projectUrl: string;
@@ -192,5 +194,14 @@ export function createConfiguredSupabaseArticleFullTextRepository(
   }
   return new SupabaseArticleFullTextRepository(
     createSupabaseArticleFullTextRpcDataSource(config),
+  );
+}
+
+export function createConfiguredSupabaseEditorialMaterialsRepository(
+  environment: Environment,
+): SupabaseEditorialMaterialsRepository {
+  const config = requireServerConfig(environment);
+  return new SupabaseEditorialMaterialsRepository(
+    createSupabaseEditorialMaterialsRpcDataSource(config),
   );
 }

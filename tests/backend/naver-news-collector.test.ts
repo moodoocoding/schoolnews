@@ -49,11 +49,13 @@ describe("Naver news metadata collector", () => {
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(NAVER_NEWS_QUERIES.length);
-    const donga = outcomes.get("naver-news-donga");
+    const donga = outcomes.get("naver-summary-donga");
     expect(donga?.items).toHaveLength(1);
     expect(donga?.items[0]?.title).toBe("초등 AI 교육을 다시 묻다");
     expect(donga?.items[0]?.publisher).toBe("동아일보");
-    expect(donga?.items[0]?.excerpt).toBeNull();
+    expect(donga?.items[0]?.excerpt).toBe(
+      "교사들이 AI의 답을 검토하는 교육을 제안했다.",
+    );
     expect(
       [...outcomes.values()].flatMap((outcome) => outcome.items),
     ).toHaveLength(1);
@@ -66,20 +68,20 @@ describe("Naver news metadata collector", () => {
     expect(
       sources.every((source) => source.requestPolicy.minIntervalMs === 86_400_000),
     ).toBe(true);
-    expect(sources.every((source) => source.contentUse === "discovery_only")).toBe(
+    expect(sources.every((source) => source.contentUse === "evidence")).toBe(
       true,
     );
-    expect(sources.every((source) => source.sourceRole === "supporting")).toBe(
-      true,
-    );
+    expect(sources.some((source) => source.sourceRole === "independent")).toBe(true);
     expect(
-      sources.every((source) => ["wire", "unknown"].includes(source.originType)),
+      sources.every((source) =>
+        ["wire", "original_reporting"].includes(source.originType),
+      ),
     ).toBe(true);
   });
 
-  it("never turns discovery-only API metadata into model evidence", () => {
+  it("turns only the official API summary into bounded evidence", () => {
     const source = createNaverPublisherSources().find(
-      (candidate) => candidate.sourceId === "naver-news-donga",
+      (candidate) => candidate.sourceId === "naver-summary-donga",
     );
     expect(source).toBeDefined();
     const article = normalizeArticle(
@@ -99,7 +101,11 @@ describe("Naver news metadata collector", () => {
       source!,
     );
 
-    expect(createRssExcerptEvidenceItem(article, source!)).toBeNull();
+    expect(createRssExcerptEvidenceItem(article, source!)).toMatchObject({
+      locator: "뉴스 검색 API 요약",
+      passage:
+        "AI 에이전트가 개인정보를 다루는 방식과 자동화된 판단의 책임을 둘러싼 논의가 이어지고 있다.",
+    });
   });
 
   it("fails without retry when the proxy rejects a request", async () => {

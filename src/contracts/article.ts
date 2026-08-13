@@ -94,6 +94,7 @@ export const evidenceItemSchema = z
  */
 export const articleModelDocumentSchema = z
   .object({
+    documentKind: z.enum(["reviewed_full_text", "licensed_api_summary"]),
     documentId: identifierSchema,
     articleId: identifierSchema,
     sourceId: identifierSchema,

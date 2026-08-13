@@ -5,45 +5,64 @@ import {
   type NormalizedArticle,
 } from "../../contracts";
 
-export const EDITORIAL_SOURCE_LAG_DAYS = 2;
-export const EDITORIAL_SOURCE_DATE_VERSION = "editorial-source-date-v1";
+export const EDITORIAL_ROLLING_WINDOW_DAYS = 7;
+export const EDITORIAL_FRESH_WINDOW_DAYS = 1;
+export const EDITORIAL_SOURCE_DATE_VERSION = "editorial-rolling-window-v2";
 
-export function getEditorialSourceDateKst(runDate: string): string {
-  const parsed = publicationDateKstSchema.parse(runDate);
+function shiftKstDate(value: string, days: number): string {
+  const parsed = publicationDateKstSchema.parse(value);
   const [year, month, day] = parsed.split("-").map(Number);
-  const sourceDate = new Date(
-    Date.UTC(year, month - 1, day - EDITORIAL_SOURCE_LAG_DAYS),
-  );
-  return sourceDate.toISOString().slice(0, 10);
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+}
+
+export function getEditorialWindowKst(input: {
+  runDate: string;
+  windowDays: number;
+}): { startDateKst: string; endDateExclusiveKst: string } {
+  if (!Number.isInteger(input.windowDays) || input.windowDays < 1 || input.windowDays > 7) {
+    throw new RangeError("Editorial window must be between one and seven days.");
+  }
+  const endDateExclusiveKst = publicationDateKstSchema.parse(input.runDate);
+  return {
+    startDateKst: shiftKstDate(endDateExclusiveKst, -input.windowDays),
+    endDateExclusiveKst,
+  };
 }
 
 /**
- * A daily edition published on D only considers articles published on D-2 in
- * Asia/Seoul. Evidence must point to one of those articles and carry the same
- * KST publication day. All other collected feed items remain archival input
- * but cannot reach topic selection or generation for this edition.
+ * The 02:00 KST run only evaluates completed calendar days. Normal runs use
+ * yesterday; the seven-day deadline compares all completed days since the
+ * previous week. Evidence must stay attached to an article in the same window.
  */
-export function selectEditorialSourceDateMaterials(input: {
+export function selectEditorialWindowMaterials(input: {
   runDate: string;
+  windowDays: number;
   articles: readonly NormalizedArticle[];
   evidenceItems: readonly EvidenceItem[];
 }): {
-  sourceDateKst: string;
+  startDateKst: string;
+  endDateExclusiveKst: string;
   articles: NormalizedArticle[];
   evidenceItems: EvidenceItem[];
 } {
-  const sourceDateKst = getEditorialSourceDateKst(input.runDate);
-  const articles = input.articles.filter(
-    (article) => getPublicationDateKst(article.publishedAt) === sourceDateKst,
-  );
+  const window = getEditorialWindowKst(input);
+  const articles = input.articles.filter((article) => {
+    const date = getPublicationDateKst(article.publishedAt);
+    return date >= window.startDateKst && date < window.endDateExclusiveKst;
+  });
   const articleIds = new Set(articles.map((article) => article.articleId));
-  const evidenceItems = input.evidenceItems.filter(
-    (item) =>
+  const evidenceItems = input.evidenceItems.filter((item) => {
+    const date = getPublicationDateKst(item.publishedAt);
+    return (
       articleIds.has(item.articleId) &&
-      getPublicationDateKst(item.publishedAt) === sourceDateKst,
-  );
+      date >= window.startDateKst &&
+      date < window.endDateExclusiveKst
+    );
+  });
   return {
-    sourceDateKst,
+    ...window,
     articles: structuredClone(articles),
     evidenceItems: structuredClone(evidenceItems),
   };

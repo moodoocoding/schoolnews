@@ -513,7 +513,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
             providerId: "supabase-fake",
             modelId: "supabase-fake-v1",
           },
-          promptVersion: "generated-post-v7-fulltext",
+          promptVersion: "generated-post-v8-grounded-documents",
           reservationPolicyVersion: "fake-reservation-v1",
           reservation: (request: { maxOutputTokens: number }) => ({
             inputTokens: 500,
@@ -567,6 +567,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
           const document = catalog.get(item.articleId);
           if (!document) throw new Error("TEST_DOCUMENT_NOT_FOUND");
           return {
+            documentKind: "reviewed_full_text" as const,
             documentId: `document:${document.bodySha256.slice(0, 32)}`,
             articleId: item.articleId,
             sourceId: item.sourceId,

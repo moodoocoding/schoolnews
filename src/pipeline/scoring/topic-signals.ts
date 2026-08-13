@@ -5,7 +5,7 @@ import type {
 import { validateArticleSources } from "../retrieval";
 import type { TopicSignals } from "./topic-score";
 
-export const TOPIC_SIGNAL_VERSION = "topic-signals-v3";
+export const TOPIC_SIGNAL_VERSION = "topic-signals-v4";
 
 interface WeightedKeyword {
   phrase: string;
@@ -62,6 +62,18 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "AI", weight: 0.55 },
     { phrase: "LLM", weight: 0.45 },
     { phrase: "디지털 전환", weight: 0.45 },
+    { phrase: "AI 에이전트", weight: 0.8 },
+    { phrase: "로봇", weight: 0.65 },
+    { phrase: "휴머노이드", weight: 0.75 },
+    { phrase: "알고리즘", weight: 0.6 },
+    { phrase: "플랫폼", weight: 0.55 },
+    { phrase: "가상현실", weight: 0.65 },
+    { phrase: "증강현실", weight: 0.65 },
+    { phrase: "메타버스", weight: 0.6 },
+    { phrase: "사이버보안", weight: 0.7 },
+    { phrase: "랜섬웨어", weight: 0.65 },
+    { phrase: "딥페이크", weight: 0.75 },
+    { phrase: "스마트폰", weight: 0.55 },
     { phrase: "artificial intelligence education", weight: 0.9 },
     { phrase: "ai in education", weight: 0.9 },
     { phrase: "digital education", weight: 0.8 },
@@ -75,6 +87,15 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "ai", weight: 0.55 },
     { phrase: "llm", weight: 0.45 },
     { phrase: "digital transformation", weight: 0.45 },
+    { phrase: "ai agent", weight: 0.8 },
+    { phrase: "robot", weight: 0.65 },
+    { phrase: "algorithm", weight: 0.6 },
+    { phrase: "platform", weight: 0.55 },
+    { phrase: "virtual reality", weight: 0.65 },
+    { phrase: "augmented reality", weight: 0.65 },
+    { phrase: "cybersecurity", weight: 0.7 },
+    { phrase: "ransomware", weight: 0.65 },
+    { phrase: "deepfake", weight: 0.75 },
   ] satisfies readonly WeightedKeyword[],
   educationContext: [
     { phrase: "교육", weight: 0.7 },
@@ -121,6 +142,14 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "중독", weight: 0.65 },
     { phrase: "허위정보", weight: 0.8 },
     { phrase: "신뢰", weight: 0.6 },
+    { phrase: "보안", weight: 0.7 },
+    { phrase: "랜섬웨어", weight: 0.8 },
+    { phrase: "감시", weight: 0.75 },
+    { phrase: "자동화", weight: 0.65 },
+    { phrase: "노동", weight: 0.6 },
+    { phrase: "일자리", weight: 0.6 },
+    { phrase: "창작", weight: 0.65 },
+    { phrase: "판단", weight: 0.65 },
     { phrase: "privacy", weight: 0.85 },
     { phrase: "biometric", weight: 0.9 },
     { phrase: "deepfake", weight: 0.85 },
@@ -130,6 +159,10 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "automated decision", weight: 0.85 },
     { phrase: "digital divide", weight: 0.85 },
     { phrase: "misinformation", weight: 0.8 },
+    { phrase: "cybersecurity", weight: 0.7 },
+    { phrase: "ransomware", weight: 0.8 },
+    { phrase: "surveillance", weight: 0.75 },
+    { phrase: "automation", weight: 0.65 },
   ] satisfies readonly WeightedKeyword[],
   nonElementaryContext: [
     { phrase: "중학교", weight: 1 },

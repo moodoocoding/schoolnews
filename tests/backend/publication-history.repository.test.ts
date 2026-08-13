@@ -19,11 +19,11 @@ class FakeDataSource implements SupabasePublicationHistoryRpcDataSource {
 describe("SupabasePublicationHistoryRepository", () => {
   it("제한된 최근 제목·fingerprint를 exact RPC로 읽는다", async () => {
     const source = new FakeDataSource({
-      data: { titles: ["최근 글"], contentFingerprints: ["a".repeat(64)] },
+      data: { titles: ["최근 글"], contentFingerprints: ["a".repeat(64)], latestPublicationDateKst: "2026-08-13" },
       error: null,
     });
     await expect(new SupabasePublicationHistoryRepository(source).getRecent(30))
-      .resolves.toEqual({ titles: ["최근 글"], contentFingerprints: ["a".repeat(64)] });
+      .resolves.toEqual({ titles: ["최근 글"], contentFingerprints: ["a".repeat(64)], latestPublicationDateKst: "2026-08-13" });
     expect(source.calls).toEqual([{ p_limit: 30 }]);
   });
 
@@ -38,9 +38,9 @@ describe("SupabasePublicationHistoryRepository", () => {
 
   it("duplicate·malformed·over-limit 응답을 fail closed 한다", async () => {
     for (const data of [
-      { titles: ["글"], contentFingerprints: ["a".repeat(64), "a".repeat(64)] },
-      { titles: [], contentFingerprints: ["not-a-hash"] },
-      { titles: ["글", "둘"], contentFingerprints: [] },
+      { titles: ["글"], contentFingerprints: ["a".repeat(64), "a".repeat(64)], latestPublicationDateKst: "2026-08-13" },
+      { titles: [], contentFingerprints: ["not-a-hash"], latestPublicationDateKst: null },
+      { titles: ["글", "둘"], contentFingerprints: [], latestPublicationDateKst: "2026-08-13" },
     ]) {
       await expect(
         new SupabasePublicationHistoryRepository(

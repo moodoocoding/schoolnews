@@ -14,6 +14,7 @@ import {
   SupabasePublisherRepository,
   SupabaseSourceAttemptRepository,
   SupabaseArticleFullTextRepository,
+  SupabaseEditorialMaterialsRepository,
 } from "../../src/repositories";
 
 const environment = parseEnvironment({
@@ -52,6 +53,7 @@ describe("configured Supabase pipeline repositories", () => {
       publishReceipt: expect.any(SupabasePublishReceiptRepository),
       publicationHistory: expect.any(SupabasePublicationHistoryRepository),
       articleFullText: expect.any(SupabaseArticleFullTextRepository),
+      editorialMaterials: expect.any(SupabaseEditorialMaterialsRepository),
     });
     expect(Object.isFrozen(repositories)).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();

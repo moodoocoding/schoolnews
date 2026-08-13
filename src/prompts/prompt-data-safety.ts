@@ -69,10 +69,10 @@ export function assertArticleDocumentsSafeForModel(
   evidenceItems: readonly EvidenceItem[],
 ): void {
   if (documents.length === 0) {
-    throw new TypeError("허용된 기사 원문이 없어 모델을 호출할 수 없습니다.");
+    throw new TypeError("허용된 기사 문서가 없어 모델을 호출할 수 없습니다.");
   }
   if (documents.length > MAX_MODEL_ARTICLE_DOCUMENTS) {
-    throw new TypeError("모델 입력 기사 원문 개수 한도를 초과했습니다.");
+    throw new TypeError("모델 입력 기사 문서 개수 한도를 초과했습니다.");
   }
 
   const evidenceById = new Map(
@@ -95,16 +95,16 @@ export function assertArticleDocumentsSafeForModel(
       document.title !== evidence.title ||
       document.publishedAt !== evidence.publishedAt
     ) {
-      throw new TypeError("기사 원문과 생성 근거의 출처 계보가 일치하지 않습니다.");
+      throw new TypeError("기사 문서와 생성 근거의 출처 계보가 일치하지 않습니다.");
     }
     if (Date.parse(document.retentionExpiresAt) <= now) {
-      throw new TypeError("보존 기한이 지난 기사 원문은 모델에 전송할 수 없습니다.");
+      throw new TypeError("보존 기한이 지난 기사 문서는 모델에 전송할 수 없습니다.");
     }
     if (
       createHash("sha256").update(document.contentText).digest("hex") !==
       document.contentHash
     ) {
-      throw new TypeError("기사 원문 해시가 본문과 일치하지 않습니다.");
+      throw new TypeError("기사 문서 해시가 본문과 일치하지 않습니다.");
     }
 
     const documentLength = modelInputGraphemeCount(document.contentText);

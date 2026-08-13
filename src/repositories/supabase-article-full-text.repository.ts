@@ -8,6 +8,7 @@ import {
   publicationDateKstSchema,
   type ArticleModelDocument,
   type EvidenceItem,
+  type SourceRegistryEntry,
 } from "../contracts";
 import type { CollectedArticleFullText } from "../pipeline/collectors/full-text-collector";
 
@@ -129,6 +130,8 @@ export type PersistArticleFullTextsInput = Omit<
 export function buildArticleModelDocuments(input: {
   evidenceItems: readonly EvidenceItem[];
   fullTexts: readonly StoredArticleFullText[];
+  apiSummarySources?: readonly SourceRegistryEntry[];
+  now?: Date;
 }): ArticleModelDocument[] {
   const fullTextByArticle = new Map(
     input.fullTexts.map((fullText) => [fullText.articleId, fullText]),
@@ -140,32 +143,70 @@ export function buildArticleModelDocuments(input: {
   ) {
     throw new SupabaseArticleFullTextError("INVALID_INPUT");
   }
+  const sourceById = new Map(
+    (input.apiSummarySources ?? []).map((source) => [source.sourceId, source]),
+  );
+  const now = input.now ?? new Date();
   const documents = input.evidenceItems.map((evidence) => {
     const fullText = fullTextByArticle.get(evidence.articleId);
+    if (fullText) {
+      if (
+        fullText.sourceId !== evidence.sourceId ||
+        fullText.permission.policyReferenceUrls.length === 0
+      ) {
+        throw new SupabaseArticleFullTextError("STATE_AMBIGUOUS");
+      }
+      return articleModelDocumentSchema.parse({
+        documentKind: "reviewed_full_text",
+        documentId: `document:${fullText.bodySha256.slice(0, 32)}`,
+        articleId: evidence.articleId,
+        sourceId: evidence.sourceId,
+        evidenceId: evidence.evidenceId,
+        sourceName: evidence.sourceName,
+        title: evidence.title,
+        publishedAt: evidence.publishedAt,
+        contentText: fullText.bodyText,
+        contentHash: fullText.bodySha256,
+        fetchedAt: fullText.collectedAt,
+        retentionExpiresAt: fullText.retentionUntil,
+        rightsBasisUrl: [...fullText.permission.policyReferenceUrls].sort()[0],
+        termsReviewedAt: fullText.permission.accessReviewedAt,
+      });
+    }
+
+    const source = sourceById.get(evidence.sourceId);
     if (
-      !fullText ||
-      fullText.sourceId !== evidence.sourceId ||
-      fullText.permission.policyReferenceUrls.length === 0
+      !source ||
+      source.collectionType !== "api" ||
+      source.contentUse !== "evidence" ||
+      source.accessStatus !== "allowed" ||
+      evidence.locator !== "뉴스 검색 API 요약" ||
+      !evidence.passage.trim() ||
+      source.policyReferenceUrls.length === 0
     ) {
       throw new SupabaseArticleFullTextError("STATE_AMBIGUOUS");
     }
+    const contentHash = createHash("sha256")
+      .update(evidence.passage)
+      .digest("hex");
     return articleModelDocumentSchema.parse({
-      documentId: `document:${fullText.bodySha256.slice(0, 32)}`,
+      documentKind: "licensed_api_summary",
+      documentId: `document:${contentHash.slice(0, 32)}`,
       articleId: evidence.articleId,
       sourceId: evidence.sourceId,
       evidenceId: evidence.evidenceId,
       sourceName: evidence.sourceName,
       title: evidence.title,
       publishedAt: evidence.publishedAt,
-      contentText: fullText.bodyText,
-      contentHash: fullText.bodySha256,
-      fetchedAt: fullText.collectedAt,
-      retentionExpiresAt: fullText.retentionUntil,
-      rightsBasisUrl: [...fullText.permission.policyReferenceUrls].sort()[0],
-      termsReviewedAt: fullText.permission.accessReviewedAt,
+      contentText: evidence.passage,
+      contentHash,
+      fetchedAt: now.toISOString(),
+      retentionExpiresAt: new Date(now.getTime() + 86_400_000).toISOString(),
+      rightsBasisUrl: [...source.policyReferenceUrls].sort()[0],
+      termsReviewedAt: source.accessReviewedAt,
     });
   });
-  if (documents.length !== input.fullTexts.length) {
+  if (documents.length !== input.evidenceItems.length) {
     throw new SupabaseArticleFullTextError("STATE_AMBIGUOUS");
   }
   return documents;

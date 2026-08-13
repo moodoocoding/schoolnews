@@ -38,6 +38,8 @@ export interface NewsIngestionResult {
   collectedCount: number;
   normalizedCount: number;
   deduplicatedCount: number;
+  /** Previously persisted articles carried into today's seven-day comparison. */
+  carriedCount?: number;
   storage: ArticleUpsertResult;
   articles: NormalizedArticle[];
   evidenceItems: EvidenceItem[];

@@ -10,7 +10,7 @@ import {
 
 describe("publication history data source", () => {
   it("RPC 경계를 그대로 전달한다", async () => {
-    const call = vi.fn().mockResolvedValue({ data: { titles: [], contentFingerprints: [] }, error: null });
+    const call = vi.fn().mockResolvedValue({ data: { titles: [], contentFingerprints: [], latestPublicationDateKst: null }, error: null });
     const source = new SupabaseClientPublicationHistoryRpcDataSource(call);
     await source.rpc("get_publication_history", { p_limit: 20 });
     expect(call).toHaveBeenCalledWith("get_publication_history", { p_limit: 20 });

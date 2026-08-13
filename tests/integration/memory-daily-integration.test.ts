@@ -208,6 +208,7 @@ function generation(provider: DeterministicFakeGeneratedPostProvider, evaluatorC
           .update(contentText)
           .digest("hex");
         return articleModelDocumentSchema.parse({
+          documentKind: "reviewed_full_text",
           documentId: `document:${contentHash.slice(0, 32)}`,
           articleId: item.articleId,
           sourceId: item.sourceId,

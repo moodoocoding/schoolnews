@@ -9,21 +9,22 @@ import {
 
 export const NAVER_NEWS_PROXY_ORIGIN = "https://k-skill-proxy.nomadamas.org";
 export const NAVER_NEWS_PROXY_PATH = "/v1/naver-news/search";
-export const NAVER_NEWS_QUERY_VERSION = "naver-news-query-v3";
+export const NAVER_NEWS_QUERY_VERSION = "naver-news-query-v4";
 export const NAVER_NEWS_QUERIES = Object.freeze([
-  "초등 AI 디지털 교육",
-  "교사 생성형 AI 교육",
-  "교육부 AI 디지털 교육",
-  "에듀테크 초등학교 교사",
-  "AI 에이전트 개인정보 저작권",
-  "아동 개인정보 AI 학교",
-  "딥페이크 아동 청소년",
-  "디지털 웰빙 아동 청소년",
-  "AI 저작권 교육 저작권",
-  "AI 접근성 교육 미디어 리터러시",
-  "새로운 디지털 기술 교육 영향",
+  "인공지능 생성형 AI",
+  "AI 에이전트 로봇",
+  "디지털 플랫폼 알고리즘",
+  "개인정보 생체정보 AI",
+  "딥페이크 허위정보",
+  "AI 저작권 창작자",
+  "스마트폰 디지털 웰빙",
+  "디지털 격차 접근성",
+  "사이버보안 랜섬웨어",
+  "가상현실 증강현실 메타버스",
+  "에듀테크 AI 교육",
+  "교사 학생 학부모 디지털",
 ]);
-export const NAVER_NEWS_MAX_ITEMS_PER_QUERY = 30;
+export const NAVER_NEWS_MAX_ITEMS_PER_QUERY = 100;
 export const NAVER_NEWS_MAX_TITLE_GRAPHEMES = 180;
 
 const ALLOWED_PUBLISHERS = Object.freeze({
@@ -139,7 +140,7 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
 
   return [...uniquePublishers.values()].map(({ host, publisher }) =>
       sourceRegistryEntrySchema.parse({
-        sourceId: `naver-news-${publisher.id}`,
+        sourceId: `naver-summary-${publisher.id}`,
         name: publisher.name,
         publisherGroupId: publisher.id,
         provenanceGroupPrefix: `naver-search:${publisher.id}`,
@@ -147,15 +148,15 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
         feedUrl: `${NAVER_NEWS_PROXY_ORIGIN}${NAVER_NEWS_PROXY_PATH}`,
         siteUrl: `https://${host}/`,
         publisherType: publisher.id === "ebs-news" ? "official" : "news",
-        // A publisher hostname does not prove that an individual article is
-        // original reporting. Naver metadata remains discovery-only and is
-        // never counted as an independent evidence source without a later,
-        // article-level provenance review.
-        originType: publisher.role === "supporting" ? "wire" : "unknown",
-        sourceRole: "supporting",
+        // Wire services remain supporting. For editorial outlets the API
+        // summary is treated as that outlet's report, while the later topic
+        // grouping still requires a distinct publisher and provenance key.
+        originType:
+          publisher.role === "supporting" ? "wire" : "original_reporting",
+        sourceRole: publisher.role,
         sourceType: "news",
         authority: "none",
-        contentUse: "discovery_only",
+        contentUse: "evidence",
         locale: "ko-KR",
         enabled: true,
         accessStatus: "allowed",
@@ -171,7 +172,7 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
           maxRedirects: 0,
         },
         notes:
-          "네이버 검색 Open API 프록시에서 제목·원문 링크·발행시각만 발견 정보로 저장합니다. 검색 요약과 기사 본문은 저장하거나 생성형 AI 입력·발행 근거로 사용하지 않습니다.",
+          "네이버 검색 Open API가 정식 반환한 제목·본문 요약·원문 링크·발행시각을 저장합니다. API 요약은 후보 선정과 제한된 근거 입력에 사용하지만 기사 원문 전문으로 간주하지 않으며, 네이버 뉴스 페이지를 자동 크롤링하지 않습니다.",
       }),
     );
 }
@@ -211,7 +212,7 @@ export async function collectNaverNewsSources(input: {
       if (!originalUrl || typeof candidate.title !== "string" || typeof candidate.description !== "string" || typeof candidate.pub_date_iso !== "string") continue;
       const publisher = publisherForUrl(originalUrl);
       if (!publisher) continue;
-      const sourceId = `naver-news-${publisher.id}`;
+      const sourceId = `naver-summary-${publisher.id}`;
       if (!sourceById.has(sourceId)) continue;
       const items = itemsBySource.get(sourceId) ?? [];
       items.push({ ...candidate, original_link: originalUrl } as NaverItem);
@@ -235,7 +236,7 @@ export async function collectNaverNewsSources(input: {
         originalUrl: item.original_link ?? item.link,
         hostedArticleUrl: normalizeHostedArticleUrl(item.link),
         title: clean(item.title),
-        excerpt: null,
+        excerpt: clean(item.description),
         author: null,
         publisher: source.name,
         publishedAt: new Date(item.pub_date_iso).toISOString(),

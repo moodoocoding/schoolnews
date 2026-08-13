@@ -64,6 +64,63 @@ function materials(sources: readonly SourceRegistryEntry[]) {
 }
 
 describe("M5 결정론적 오늘의 주제 선정", () => {
+  it("즉시 모드는 기본 적격 후보라도 높은 82점 기준 전에는 보류한다", () => {
+    const base = materials([primarySource, independentSource]);
+    const deadline = selectDailyTopic({ ...base, publicationMode: "deadline" });
+    expect(deadline.status).toBe("selected");
+    if (deadline.status !== "selected") return;
+    const immediate = selectDailyTopic({ ...base, publicationMode: "immediate" });
+    expect(immediate.status).toBe(
+      deadline.candidate.score.total >= 82 && deadline.candidate.score.socialMeaning >= 6
+        ? "selected"
+        : "none",
+    );
+  });
+  it("국내 복수 언론의 기술 뉴스는 교육 단어가 없어도 교육 영향 후보가 된다", () => {
+    const secondIndependentSource: SourceRegistryEntry =
+      sourceRegistryEntrySchema.parse({
+        ...independentSource,
+        sourceId: "second-tech-news",
+        name: "두번째기술뉴스",
+        publisherGroupId: "second-tech-news",
+        provenanceGroupPrefix: "second-tech-report",
+        feedUrl: "https://second.example.org/rss.xml",
+        siteUrl: "https://second.example.org/",
+        policyReferenceUrls: ["https://second.example.org/rss-policy"],
+      });
+    const first = normalizeArticle(
+      inputFor(independentSource, {
+        title: "AI 에이전트가 개인정보 판단을 대신하는 시대",
+        excerpt:
+          "AI 에이전트가 개인정보를 조회해 자동 의사결정을 수행하면서 신뢰와 책임 문제가 제기됐다.",
+      }),
+      independentSource,
+    );
+    const second = normalizeArticle(
+      inputFor(secondIndependentSource, {
+        title: "개인정보 판단 맡은 AI 에이전트, 책임은 누구에게",
+        excerpt:
+          "자동 의사결정에 쓰이는 AI 에이전트가 개인정보와 저작권을 어떻게 다뤄야 하는지 논의가 이어졌다.",
+      }),
+      secondIndependentSource,
+    );
+    const articles = [first, second];
+    const sources = [independentSource, secondIndependentSource];
+    const result = selectDailyTopic({
+      articles,
+      evidenceItems: createRssExcerptEvidenceItems({
+        articles,
+        sourceRegistryEntries: sources,
+      }),
+      sources,
+    });
+
+    expect(result.status).toBe("selected");
+    expect(result.status === "selected" && result.candidate.evidencePolicy).toBe(
+      "two_independent_sources",
+    );
+  });
+
   it("점수가 높아도 공식 RSS 한 곳뿐이면 생성 전에 보류한다", () => {
     const result = selectDailyTopic(materials([primarySource]));
 

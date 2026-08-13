@@ -12,3 +12,4 @@ export * from "./publication-history.data-source";
 export * from "./publish-receipt.data-source";
 export * from "./publisher.data-source";
 export * from "./source-attempt.data-source";
+export * from "./editorial-materials.data-source";

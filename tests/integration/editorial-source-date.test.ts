@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { evidenceItemSchema, normalizedArticleSchema } from "../../src/contracts";
 import {
-  evidenceItemSchema,
-  normalizedArticleSchema,
-} from "../../src/contracts";
-import {
-  getEditorialSourceDateKst,
-  selectEditorialSourceDateMaterials,
+  getEditorialWindowKst,
+  selectEditorialWindowMaterials,
 } from "../../src/pipeline/orchestrator";
 
 function article(articleId: string, publishedAt: string) {
@@ -15,12 +12,12 @@ function article(articleId: string, publishedAt: string) {
     externalId: articleId,
     originalUrl: `https://example.com/${articleId}`,
     title: `기사 ${articleId}`,
-    excerpt: "초등 AI 디지털 교육 기사입니다.",
+    excerpt: "AI 디지털 기술의 교육 영향을 살펴보는 기사입니다.",
     author: null,
     publisher: "테스트 매체",
     publishedAt,
     publishedAtPrecision: "date",
-    discoveredAt: "2026-08-01T06:00:00+09:00",
+    discoveredAt: "2026-08-14T01:00:00+09:00",
     articleId,
     publisherGroupId: `publisher-${articleId}`,
     provenanceGroupKey: `provenance-${articleId}`,
@@ -51,38 +48,36 @@ function evidence(articleId: string, publishedAt: string) {
     url: `https://example.com/${articleId}`,
     publishedAt,
     publishedAtPrecision: "date",
-    passage: "초등 AI 디지털 교육에 관한 확인된 내용입니다.",
+    passage: "AI 디지털 기술의 교육 영향을 생각할 수 있는 확인된 내용입니다.",
     locator: "RSS 요약",
   });
 }
 
-describe("발행일 기준 웹 클리핑 날짜", () => {
-  it("8월 1일 발행물의 편집 원문일을 7월 30일로 고정한다", () => {
-    expect(getEditorialSourceDateKst("2026-08-01")).toBe("2026-07-30");
-    expect(getEditorialSourceDateKst("2026-01-01")).toBe("2025-12-30");
+describe("최근 7일 편집 후보 창", () => {
+  it("실행일을 제외한 직전 7개 KST 날짜를 계산한다", () => {
+    expect(getEditorialWindowKst({ runDate: "2026-08-14", windowDays: 7 })).toEqual({
+      startDateKst: "2026-08-07",
+      endDateExclusiveKst: "2026-08-14",
+    });
+    expect(() => getEditorialWindowKst({ runDate: "2026-08-14", windowDays: 8 })).toThrow(
+      RangeError,
+    );
   });
 
-  it("정확히 D-2 KST 기사와 그 기사의 근거만 선정 단계로 보낸다", () => {
-    const target = article("target", "2026-07-30T00:00:00+09:00");
-    const sameInstantOutsideKst = article(
-      "outside",
-      "2026-07-29T14:59:59Z",
-    );
-    const later = article("later", "2026-07-31T00:00:00+09:00");
-    const result = selectEditorialSourceDateMaterials({
-      runDate: "2026-08-01",
-      articles: [target, sameInstantOutsideKst, later],
-      evidenceItems: [
-        evidence("target", target.publishedAt),
-        evidence("outside", sameInstantOutsideKst.publishedAt),
-        evidence("later", later.publishedAt),
-      ],
+  it("경계 안 기사와 정확히 연결된 근거만 남긴다", () => {
+    const start = article("start", "2026-08-07T00:00:00+09:00");
+    const end = article("end", "2026-08-13T23:59:59+09:00");
+    const old = article("old", "2026-08-06T23:59:59+09:00");
+    const today = article("today", "2026-08-14T00:00:00+09:00");
+    const result = selectEditorialWindowMaterials({
+      runDate: "2026-08-14",
+      windowDays: 7,
+      articles: [start, end, old, today],
+      evidenceItems: [start, end, old, today].map((item) =>
+        evidence(item.articleId, item.publishedAt),
+      ),
     });
-
-    expect(result.sourceDateKst).toBe("2026-07-30");
-    expect(result.articles.map((item) => item.articleId)).toEqual(["target"]);
-    expect(result.evidenceItems.map((item) => item.articleId)).toEqual([
-      "target",
-    ]);
+    expect(result.articles.map((item) => item.articleId)).toEqual(["start", "end"]);
+    expect(result.evidenceItems.map((item) => item.articleId)).toEqual(["start", "end"]);
   });
 });

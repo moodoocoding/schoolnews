@@ -13,8 +13,12 @@ import {
   scoreTopicSignals,
 } from "../scoring";
 
-export const DAILY_TOPIC_SELECTION_VERSION = "daily-topic-selection-v2";
+export const DAILY_TOPIC_SELECTION_VERSION = "daily-topic-selection-v3";
 export const RELATED_TITLE_SIMILARITY_THRESHOLD = 0.42;
+export const IMMEDIATE_PUBLICATION_THRESHOLDS = Object.freeze({
+  total: 82,
+  socialMeaning: 6,
+});
 
 const BILINGUAL_TITLE_CONCEPTS = [
   ["초등학교", "초등교육", "초등학생", "primary school", "elementary school", "primary education", "schoolchildren"],
@@ -51,6 +55,7 @@ export interface SelectDailyTopicInput {
   sources: readonly SourceRegistryEntry[];
   previousPostTitles?: readonly string[];
   previousContentFingerprints?: readonly string[];
+  publicationMode?: "immediate" | "deadline";
 }
 
 function sha256(value: string): string {
@@ -270,12 +275,21 @@ export function selectDailyTopic(
     });
     return built ? [built] : [];
   });
-  eligible.sort(
+  const publishable =
+    input.publicationMode === "immediate"
+      ? eligible.filter(
+          ({ candidate }) =>
+            candidate.score.total >= IMMEDIATE_PUBLICATION_THRESHOLDS.total &&
+            candidate.score.socialMeaning >=
+              IMMEDIATE_PUBLICATION_THRESHOLDS.socialMeaning,
+        )
+      : eligible;
+  publishable.sort(
     (left, right) =>
       right.candidate.score.total - left.candidate.score.total ||
       left.candidate.topicId.localeCompare(right.candidate.topicId, "en"),
   );
-  const selected = eligible[0];
+  const selected = publishable[0];
   return selected
     ? {
         status: "selected",

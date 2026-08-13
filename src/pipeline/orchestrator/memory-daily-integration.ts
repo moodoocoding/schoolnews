@@ -20,8 +20,9 @@ import {
   selectDailyTopic,
 } from "./select-daily-topic";
 import {
+  EDITORIAL_ROLLING_WINDOW_DAYS,
   EDITORIAL_SOURCE_DATE_VERSION,
-  selectEditorialSourceDateMaterials,
+  selectEditorialWindowMaterials,
 } from "./editorial-source-date";
 import {
   POST_GENERATION_PIPELINE_VERSION,
@@ -386,8 +387,9 @@ export function createMemoryDailyStages(
       if (collected.artifact.kind !== "news_ingestion") {
         throw new DailyStepError("INVALID_SOURCE_DATA", false);
       }
-      const editorialMaterials = selectEditorialSourceDateMaterials({
+      const editorialMaterials = selectEditorialWindowMaterials({
         runDate: context.runDate,
+        windowDays: EDITORIAL_ROLLING_WINDOW_DAYS,
         articles: collected.artifact.value.articles,
         evidenceItems: collected.artifact.value.evidenceItems,
       });
@@ -397,6 +399,7 @@ export function createMemoryDailyStages(
         sources,
         previousPostTitles,
         previousContentFingerprints,
+        publicationMode: "deadline",
       });
       const workspaceValue =
         selected.status === "none"

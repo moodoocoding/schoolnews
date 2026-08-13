@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { sha256Schema } from "../contracts";
+import { publicationDateKstSchema, sha256Schema } from "../contracts";
 
 export const SUPABASE_PUBLICATION_HISTORY_RPC_NAME =
   "get_publication_history" as const;
@@ -21,6 +21,7 @@ const historySchema = z
   .object({
     titles: z.array(z.string().trim().min(1).max(500)).max(365),
     contentFingerprints: z.array(sha256Schema).max(365),
+    latestPublicationDateKst: publicationDateKstSchema.nullable(),
   })
   .strict()
   .superRefine((history, context) => {

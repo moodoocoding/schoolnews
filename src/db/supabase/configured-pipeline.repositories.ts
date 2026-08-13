@@ -13,6 +13,7 @@ import type {
   SupabasePublisherRepository,
   SupabaseSourceAttemptRepository,
   SupabaseArticleFullTextRepository,
+  SupabaseEditorialMaterialsRepository,
 } from "../../repositories";
 import { createConfiguredSupabaseDailyRunRepository } from "./configured-daily-run.repository";
 import {
@@ -24,6 +25,7 @@ import {
   createConfiguredSupabasePublisherRepository,
   createConfiguredSupabaseSourceAttemptRepository,
   createConfiguredSupabaseArticleFullTextRepository,
+  createConfiguredSupabaseEditorialMaterialsRepository,
 } from "./configured-write.repositories";
 
 export interface ConfiguredSupabasePipelineRepositories {
@@ -36,6 +38,7 @@ export interface ConfiguredSupabasePipelineRepositories {
   publishReceipt: SupabasePublishReceiptRepository;
   publicationHistory: SupabasePublicationHistoryRepository;
   articleFullText: SupabaseArticleFullTextRepository;
+  editorialMaterials: SupabaseEditorialMaterialsRepository;
 }
 
 /** Creates server-only clients lazily; no RPC or network call occurs here. */
@@ -64,5 +67,7 @@ export function createConfiguredSupabasePipelineRepositories(
       createConfiguredSupabasePublicationHistoryRepository(environment),
     articleFullText:
       createConfiguredSupabaseArticleFullTextRepository(environment),
+    editorialMaterials:
+      createConfiguredSupabaseEditorialMaterialsRepository(environment),
   });
 }

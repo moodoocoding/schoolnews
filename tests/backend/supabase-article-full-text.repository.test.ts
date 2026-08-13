@@ -10,6 +10,7 @@ import {
   type SupabaseArticleFullTextRpcResult,
 } from "../../src/repositories/supabase-article-full-text.repository";
 import { validEvidenceItems } from "../fixtures/content/quality";
+import { createNaverPublisherSources } from "../../src/pipeline/collectors";
 
 const fullText: CollectedArticleFullText = {
   articleId: "article-1",
@@ -204,6 +205,7 @@ describe("Supabase private 기사 원문 repository", () => {
       fullTexts: [row],
     });
     expect(documents[0]).toMatchObject({
+      documentKind: "reviewed_full_text",
       articleId: evidence.articleId,
       evidenceId: evidence.evidenceId,
       contentHash: fullText.bodySha256,
@@ -211,6 +213,44 @@ describe("Supabase private 기사 원문 repository", () => {
     });
     expect(() =>
       buildArticleModelDocuments({ evidenceItems: [evidence], fullTexts: [] }),
+    ).toThrow();
+  });
+
+  it("네이버 검색 API가 제공한 요약만 별도 문서 유형으로 만든다", () => {
+    const source = createNaverPublisherSources().find(
+      (candidate) => candidate.sourceId === "naver-summary-donga",
+    )!;
+    const base = validEvidenceItems()[0];
+    const evidence = {
+      ...base,
+      sourceId: source.sourceId,
+      publisherGroupId: source.publisherGroupId,
+      sourceRole: source.sourceRole,
+      sourceType: source.sourceType,
+      sourceName: source.name,
+      passage: "AI 에이전트가 사람의 판단과 개인정보 처리 방식에 변화를 만들고 있다는 내용이다.",
+      locator: "뉴스 검색 API 요약",
+    };
+    const now = new Date("2026-08-14T00:00:00.000Z");
+    const documents = buildArticleModelDocuments({
+      evidenceItems: [evidence],
+      fullTexts: [],
+      apiSummarySources: [source],
+      now,
+    });
+
+    expect(documents[0]).toMatchObject({
+      documentKind: "licensed_api_summary",
+      contentText: evidence.passage,
+      rightsBasisUrl: source.policyReferenceUrls[0],
+    });
+    expect(() =>
+      buildArticleModelDocuments({
+        evidenceItems: [{ ...evidence, locator: "RSS 요약" }],
+        fullTexts: [],
+        apiSummarySources: [source],
+        now,
+      }),
     ).toThrow();
   });
 });
