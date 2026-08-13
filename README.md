@@ -306,6 +306,8 @@ npm run daily:dry-run
 
 이 dry-run은 `collect → normalize → deduplicate → score → retrieve → generate → validate`를 결정론적 가짜 단계로 실행합니다. 실제 뉴스 수집, 모델 호출, 외부 쓰기와 게시를 모두 `false`로 출력하며 프로세스가 끝나면 메모리 저널도 사라집니다.
 
+실제 Supabase와 공식 RSS의 `collect → score`만 검증하는 `npm run supabase:dry-run`도 제공합니다. 이 명령은 모델·publisher·receipt를 구성하지 않지만, KST 당일 실행 슬롯과 006 출처 호출 간격을 실제로 소비하므로 preview 프로젝트에서 날짜 확인값을 지정한 일회성 검사에만 사용합니다. 연결된 운영 프로젝트에서는 `ALLOW_PRODUCTION_SUPABASE_DRY_RUN=true`까지 명시하지 않으면 수집 전에 중단합니다. 운영 프로젝트의 오늘 슬롯은 아래 개발용 전체 발행 검증이 이미 사용했으므로 이번에는 외부 dry-run을 실행하지 않고 fake 통합 회귀와 실제 전체 계보 발행으로 검증했습니다.
+
 실제 공식 RSS를 읽어 메모리에서 수집·선정까지 KST 일일 실행으로 조립하려면 다음 명령을 사용합니다.
 
 ```bash
@@ -475,6 +477,7 @@ Supabase `006` migration은 DB에 고정한 MSIT 24시간 정책과 호출자 �
 - Cron Route Handler는 `Authorization: Bearer CRON_SECRET`을 먼저 상수시간 비교한 뒤에만 DB와 모델 코드를 지연 로드합니다. 요청 query로 실행일을 지정할 수 없고 서버 KST 날짜만 사용하며, 함수 300초 한도 안에서 runner는 240초에 종료합니다.
 - Vercel Cron 설정은 매일 UTC 22:00, 한국시간 07:00에 `/api/cron/daily`을 호출합니다. 실패·차단은 HTTP 500, busy·기존 종료 실행은 멱등 결과로 응답하며 응답과 로그에 secret·기사 본문을 포함하지 않습니다.
 - 실제 공개 테스트는 `ALLOW_TEST_PUBLICATION=true`와 당일 KST `TEST_PUBLICATION_CONFIRM_DATE`가 모두 일치하고 대상 프로젝트가 고정된 경우에만 시작됩니다. 가짜 출처는 `.invalid`, 모델 비용은 숫자 0으로 기록하며 실제 Gemini·RSS 호출은 없습니다.
+- 실제 Supabase+RSS dry-run은 별도 CLI로 모델·publisher를 구조적으로 구성하지 않으며, 운영 프로젝트에서는 별도 production 확인값까지 요구합니다. dry-run도 당일 DB 실행 슬롯과 24시간 출처 간격을 소비하므로 live 전환 시험으로 같은 날짜에 연속 실행하지 않습니다.
 - 2026-08-13 테스트 게시물 `[개발용 테스트] 초등 AI 수업 확인` 1건을 정상 계보로 발행했고 공개 읽기와 로컬 홈·상세에서 확인했습니다. 이 글은 실제 뉴스가 아니며 해당 날짜의 한 건 슬롯을 사용했습니다.
 
 상태: **코드·DB·테스트 발행 완료, Vercel 외부 배포 승인 대기**. 이용 허락이 확인된 독립 보도 출처는 아직 0곳이므로 Cron을 live로 배포하더라도 현재 공식 MSIT 한 곳만으로는 매일 안전 보류되고 실제 Gemini·자동 게시 호출은 0회가 정상입니다. 교육플러스·AI타임스·에듀프레스·EBS는 약관·RSS·재가공 허락 조건을 충족하지 못해 활성화하지 않았습니다.
