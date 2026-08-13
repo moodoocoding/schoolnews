@@ -379,8 +379,8 @@ npm run build
 #### 현재 수집원과 이용 정책
 
 - 국내 RSS 활성 등록부는 과학기술정보통신부, 한국교육개발원, KISA 보도자료, 보건복지부, KISA 보호나라 보고서·가이드, 한국콘텐츠진흥원 연구보고서, 뉴시스 IT·바이오의 7개 피드입니다. KISA 보도자료와 뉴시스는 `discovery_only`라 `description/summary`도 버리고 제목·링크·날짜만 저장합니다. 나머지 공식 피드는 짧은 RSS 설명을 근거 후보로 쓸 수 있지만, 효과·인과·전망을 공식기관 한 곳만으로 발행하지 않습니다.
-- 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94`는 최소 간격 24시간, 한 번에 최대 50건, 15초 제한, 1.5MB 응답 상한입니다. 2026-08-13 실제 1회 측정에서 첫 바이트 6.824초, 전체 9.828초, 700,119바이트로 확인돼 기존 10초 제한을 유한하게 조정했습니다. DNS·응답 시작·본문 읽기 timeout을 구분하고 멈춘 본문 reader를 직접 취소합니다.
-- 독립 기관·연구 출처는 EU 집행위원회 디지털전략 RSS `https://digital-strategy.ec.europa.eu/en/rss.xml`입니다. EU 법적 고지 `https://commission.europa.eu/legal-notice_en`의 CC BY 4.0 재사용 조건과 `robots.txt`를 확인했습니다. 최소 간격 24시간, 최대 25건, 15초, 500KB 상한이며 이미지·캡션·전체 HTML 대신 페이지 헤더의 짧은 teaser만 최대 800자로 정제합니다. 이는 한국 기관과 제도적으로 독립된 공공 연구·정책 출처이지 독립 언론이라는 뜻은 아닙니다.
+- 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94`는 한 번에 최대 50건, 15초 제한, 1.5MB 응답 상한입니다. 2026-08-13 실제 1회 측정에서 첫 바이트 6.824초, 전체 9.828초, 700,119바이트로 확인돼 기존 10초 제한을 유한하게 조정했습니다. DNS·응답 시작·본문 읽기 timeout을 구분하고 멈춘 본문 reader를 직접 취소합니다. 과거 24시간 예약 정책은 현재 운영 수집 경로에서 사용하지 않습니다.
+- EU 집행위원회 디지털전략 RSS `https://digital-strategy.ec.europa.eu/en/rss.xml`은 과거 검증 이력으로만 남기며 현재 국내 기사 중심 운영 근거에서는 제외합니다. 당시에는 CC BY 4.0 재사용 조건과 `robots.txt`를 확인했고 최대 25건, 15초, 500KB 상한을 적용했습니다.
 - 2026-08-13 Supabase 012 정책을 적용하고 EC RSS를 서버 예약 뒤 실제 1회 수집해 10건·오류 0을 확인했습니다. 기사 내용은 로그에 남기지 않았고 Gemini·발행 호출은 각각 0회였습니다. 즉시 재예약은 `TOO_SOON`으로 차단됐습니다.
 - 피드의 `title`, `link`, `pubDate`, 짧은 `description`만 읽습니다. 실제 피드의 매우 긴 `content:encoded`, HWP 변환 JSON, 이미지, 첨부파일과 상세 `/bbs` 본문은 저장하거나 추가 크롤링하지 않습니다.
 - 날짜만 제공하는 `YYYY.MM.DD` 값은 KST 자정 시각으로 변환하고 `publishedAtPrecision: "date"`로 원래 정밀도를 보존합니다.
@@ -472,7 +472,7 @@ npm run build
 ### M12 — Supabase 전체 실행 factory
 
 - `createSupabaseDailyStages()`와 `runSupabaseDailyPipeline()`이 `collect → score → generate → validate → publish`를 하나의 순서 계약으로 조립합니다. 구성된 Supabase client, 환경 변수, 실제 RSS 수집기나 Gemini factory를 스스로 import하지 않고 외부에서 명시적으로 주입된 구현만 사용합니다.
-- collect는 출처별 서버 시각 예약을 물리 수집 직전에 확인하고, 부작용 없는 capture repository로 M2 결과를 만든 뒤 source·article·evidence·collect artifact를 003 RPC 하나로 저장합니다. score는 eligible/none 결과와 topic 계보를 003에 원자 저장합니다.
+- collect는 호출 간격 예약 없이 활성 수집원을 직접 호출하고, 부작용 없는 capture repository로 M2 결과를 만든 뒤 source·article·evidence·collect artifact를 003 RPC 하나로 저장합니다. score는 eligible/none 결과와 topic 계보를 003에 원자 저장합니다.
 - `getExactArtifactForStage()`는 run·stage·kind·output reference·payload/configuration fingerprint·부모 계보·canonical payload가 모두 같은 산출물만 응답 유실 후 성공으로 조정합니다. commit 여부가 여전히 불분명하면 실행을 terminal로 닫지 않고 lease 회수에 넘기며, 같은 쓰기를 즉시 반복하지 않습니다.
 - generation은 초안·수정·의미 평가의 각 물리 route를 007 장부 안쪽에서만 실행하고, model·prompt·reservation policy 버전을 설정 지문에 결속합니다. 사용량은 generate artifact에서 한 번만 일일 journal에 합산됩니다.
 - 009 forward migration은 미완료 model intent는 예약 상한, 완료 intent는 감사 기록의 실제 token·cost로 합산합니다. 그래서 첫 호출의 미사용 예약량을 다음 의미 평가가 안전하게 사용하면서도 호출 전 hard cap은 유지합니다. null/unpriced·비정상 audit는 계속 fail-closed입니다.
@@ -484,12 +484,12 @@ npm run build
 
 - 서버 전용 운영 조립은 공개 이력 조회 실패를 fail-closed하고, 허용된 RSS 등록부·Gemini raw route·모델 예산·원자 발행·영수증 복구를 연결합니다. 출처별 호출 간격 예약은 사용하지 않습니다.
 - Cron Route Handler는 `Authorization: Bearer CRON_SECRET`을 먼저 상수시간 비교한 뒤에만 DB와 모델 코드를 지연 로드합니다. 요청 query로 실행일을 지정할 수 없고 서버 KST 날짜만 사용하며, 함수 300초 한도 안에서 runner는 240초에 종료합니다.
-- Vercel Cron 설정은 매일 UTC 22:00, 한국시간 07:00에 `/api/cron/daily`을 호출합니다. 실패·차단은 HTTP 500, busy·기존 종료 실행은 멱등 결과로 응답하며 응답과 로그에 secret·기사 본문을 포함하지 않습니다.
+- Vercel Cron 설정은 매일 UTC 00:00, 한국시간 09:00에 `/api/cron/daily`을 호출합니다. 실패·차단은 HTTP 500, busy·기존 종료 실행은 멱등 결과로 응답하며 응답과 로그에 secret·기사 본문을 포함하지 않습니다.
 - 실제 공개 테스트는 `ALLOW_TEST_PUBLICATION=true`와 당일 KST `TEST_PUBLICATION_CONFIRM_DATE`가 모두 일치하고 대상 프로젝트가 고정된 경우에만 시작됩니다. 가짜 출처는 `.invalid`, 모델 비용은 숫자 0으로 기록하며 실제 Gemini·RSS 호출은 없습니다.
 - 실제 Supabase+RSS dry-run은 별도 CLI로 모델·publisher를 구조적으로 구성하지 않으며, 운영 프로젝트에서는 별도 production 확인값까지 요구합니다. dry-run은 게시하지 않지만 영속 실행·수집 자료는 남기므로 운영 프로젝트가 아닌 preview 프로젝트에서 사용합니다.
 - 2026-08-13 테스트 게시물 `[개발용 테스트] 초등 AI 수업 확인` 1건을 정상 계보로 발행했고 공개 읽기와 로컬 홈·상세에서 확인했습니다. 이 글은 실제 뉴스가 아니며 해당 날짜의 한 건 슬롯을 사용했습니다.
 
-상태: **코드·DB·테스트 발행·Vercel Production·Cron·자동 게시 활성화 완료**. 해외 기사는 운영 근거에서 제외했고, 이용 조건이 확인되지 않은 국내 언론은 발견 정보만 사용합니다. 같은 사건을 직접 뒷받침하는 허용 근거가 부족하면 안전 보류됩니다. Production은 `https://schoolnews-neon.vercel.app`이며 Cron은 매일 UTC 15:00(KST 00:00)에 실행됩니다.
+상태: **코드·DB·테스트 발행·Vercel Production·Cron·자동 게시 활성화 완료**. 해외 기사는 운영 근거에서 제외했고, 이용 조건이 확인되지 않은 국내 언론은 발견 정보만 사용합니다. 같은 사건을 직접 뒷받침하는 허용 근거가 부족하면 안전 보류됩니다. Production은 `https://schoolnews-neon.vercel.app`이며 Cron은 매일 UTC 00:00(KST 09:00)에 실행됩니다.
 
 ### M15 — 8월 기록 백필과 갤러리 리디자인
 
@@ -622,7 +622,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - 데이터·콘텐츠·공개 화면 계약: 런타임 스키마와 회귀 테스트 구현 완료
 - 서브 에이전트 개발·검토·README 기록 방식: 확정
 - 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 투영의 개발용 테스트 게시물 1건을 갤러리와 상세에서 확인했습니다.
-- Supabase: 기존 프로젝트에 001~012를 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, MSIT·EC 24시간 예약, 모델 호출 intent·실제 사용량 예산 장부, 게시 이력과 발행 영수증 조정 RPC가 존재합니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`과 Vercel Production 환경에만 저장합니다. 대화 중 노출된 초기 서버 키는 별도의 Vercel 운영 키로 교체하고 폐기했습니다. SQL Editor 수동 적용 내역은 CLI migration ledger에 자동 기록되지 않으므로 `db push/repair/include-all`은 이력 대조 전 사용하지 않습니다.
+- Supabase: 기존 프로젝트에 001~012를 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, 과거 출처 예약 이력, 모델 호출 intent·실제 사용량 예산 장부, 게시 이력과 발행 영수증 조정 RPC가 존재합니다. 예약 테이블은 호환 이력으로만 보존하며 현재 수집 경로에서는 호출하지 않습니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`과 Vercel Production 환경에만 저장합니다. 대화 중 노출된 초기 서버 키는 별도의 Vercel 운영 키로 교체하고 폐기했습니다. SQL Editor 수동 적용 내역은 CLI migration ledger에 자동 기록되지 않으므로 `db push/repair/include-all`은 이력 대조 전 사용하지 않습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
 - 실제 뉴스 수집: 국내 공식·연구 RSS와 네이버 뉴스 검색 API의 허용 매체 제목·공식 API 요약·원문 링크를 매일 수집합니다. 검색 API 요약은 원문 전문으로 가장하지 않고 명시된 문장 범위 안에서만 근거 입력으로 사용합니다. 네이버 호스팅 페이지 직접 크롤링은 허용하지 않습니다.
 - 후보 점수와 생성 품질 게이트: 한국어·영어 신호와 제한된 교차언어 개념 묶음, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현했습니다. 선정된 모든 근거의 원문 1:1 coverage, SHA-256, 보존기한, 출처 메타데이터, 학생·보호자 식별 패턴, 문서별·전체 입력 상한을 모델 호출 전에 검사합니다.
