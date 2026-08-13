@@ -160,7 +160,8 @@ describe("뉴스 수집 M2 통합", () => {
       "failed",
       "failed",
     ]);
-    expect(result.outcomes[1].issues[0].code).toBe("INVALID_SOURCE_DATA");
+    expect(result.outcomes[1].issues[0].code).toBe("SOURCE_UNAVAILABLE");
+    expect(result.outcomes[2].issues[0].code).toBe("INVALID_SOURCE_DATA");
     expect(result.outcomes[2].sourceId).toBe(wrongOutcomeSource.sourceId);
   });
 

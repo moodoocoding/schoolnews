@@ -14,6 +14,8 @@ import type {
 } from "../../src/contracts";
 import { sourceRegistryEntrySchema } from "../../src/contracts";
 import { RSS_SOURCE_REGISTRY } from "../../src/pipeline/collectors";
+import { normalizeArticle } from "../../src/pipeline/normalize";
+import { createRssExcerptEvidenceItem } from "../../src/pipeline/retrieval";
 import {
   DeterministicFakeGeneratedPostProvider,
   type ModelInvocationLedger,
@@ -755,6 +757,56 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     expect(fake.provider.calls).toHaveLength(0);
     expect(fake.ledger.prepareInputs).toHaveLength(0);
     expect(fake.receiptCalls).toBe(0);
+  });
+
+  it("당일 수집원이 모두 막혀도 최근 7일 자료가 있으면 수집 단계를 실패시키지 않는다", async () => {
+    const fake = setup([primarySource, independentSource]);
+    fake.options.sourceAttempt.reserve = async (input) => ({
+      status: "too_soon" as const,
+      code: "TOO_SOON" as const,
+      sourceId: input.sourceId,
+      lastAttemptAt: "2026-08-13T00:00:00.000Z",
+      nextAllowedAt: "2026-08-14T00:00:00.000Z",
+    });
+    const articles = [primarySource, independentSource].map((source) =>
+      normalizeArticle(articleFor(source), source),
+    );
+    const evidenceItems = articles.map((article, index) => {
+      const evidence = createRssExcerptEvidenceItem(
+        article,
+        [primarySource, independentSource][index],
+      );
+      if (!evidence) throw new Error("TEST_EVIDENCE_REQUIRED");
+      return evidence;
+    });
+    fake.options.editorialMaterials = {
+      getRolling: async () => ({ articles, evidenceItems }),
+    };
+
+    const result = await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    expect(result.status).toBe("executed");
+    if (result.status !== "executed") return;
+    expect(result.journal.run.steps[0]).toMatchObject({
+      stage: "collect",
+      status: "succeeded",
+    });
+    expect(result.journal.run.status).toBe("succeeded_without_publish");
+    expect(fake.collectorCalls).toBe(0);
+    expect(fake.contentPersistence.collectInputs).toHaveLength(1);
+    expect(
+      (fake.contentPersistence.collectInputs[0].artifact.payload as {
+        value: { carriedCount?: number };
+      }).value.carriedCount,
+    ).toBe(2);
+    expect(fake.provider.calls).toHaveLength(0);
+    expect(fake.publishInputs).toHaveLength(0);
   });
 
   it("모호한 collect 커밋을 terminal로 닫지 않고 lease 회수 후 exact artifact만 재사용한다", async () => {

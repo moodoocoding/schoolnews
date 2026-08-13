@@ -88,6 +88,7 @@ function failedCollectionOutcome(
   sourceId: string,
   startedAt: string,
   message: string,
+  code: "INVALID_SOURCE_DATA" | "SOURCE_UNAVAILABLE",
 ): SourceCollectionOutcome {
   return sourceCollectionOutcomeSchema.parse({
     sourceId,
@@ -97,7 +98,7 @@ function failedCollectionOutcome(
     items: [],
     issues: [
       {
-        code: "INVALID_SOURCE_DATA",
+        code,
         message,
         retryable: false,
         itemIndex: null,
@@ -123,6 +124,7 @@ async function collectIsolated(
         source.sourceId,
         startedAt,
         "수집기가 요청한 수집원과 일치하는 유효한 결과를 반환하지 않았습니다.",
+        "INVALID_SOURCE_DATA",
       );
     }
     return parsed.data;
@@ -134,6 +136,7 @@ async function collectIsolated(
       source.sourceId,
       startedAt,
       "수집기 예외를 해당 수집원의 실패로 격리했습니다.",
+      "SOURCE_UNAVAILABLE",
     );
   }
 }

@@ -358,6 +358,30 @@ function carryRollingMaterials(
   };
 }
 
+function historicalFallbackResult(input: {
+  failedResult: Readonly<NewsIngestionResult>;
+  historical: Readonly<{
+    articles: Readonly<NewsIngestionResult["articles"]>;
+    evidenceItems: Readonly<NewsIngestionResult["evidenceItems"]>;
+  }>;
+}): NewsIngestionResult {
+  return {
+    ...structuredClone(input.failedResult),
+    // Network/source availability failures remain observable in outcomes, but
+    // they do not discard already persisted, still-valid editorial material.
+    status: "partial",
+    carriedCount: input.historical.articles.length,
+    storage: {
+      insertedCount: 0,
+      duplicateCount: input.historical.articles.length,
+      totalCount: input.historical.articles.length,
+    },
+    articles: [...structuredClone(input.historical.articles)],
+    evidenceItems: [...structuredClone(input.historical.evidenceItems)],
+    candidates: [],
+  };
+}
+
 function tooSoonOutcome(source: SourceRegistryEntry): SourceCollectionOutcome {
   const now = new Date().toISOString();
   return sourceCollectionOutcomeSchema.parse({
@@ -546,23 +570,33 @@ export function createSupabaseDailyStages(
         }
         throw error;
       }
-      if (result.status === "failed") {
-        const issues = result.outcomes.flatMap((outcome) => outcome.issues);
-        throw new DailyStepError(
-          issues.some((issue) => issue.code === "COLLECTION_TIMEOUT")
-            ? "COLLECTION_TIMEOUT"
-            : issues.some((issue) => issue.code === "SOURCE_UNAVAILABLE")
-              ? "SOURCE_UNAVAILABLE"
-              : "INVALID_SOURCE_DATA",
-          false,
-        );
-      }
       const historical = options.editorialMaterials
         ? await options.editorialMaterials.getRolling({
             runDate: context.runDate,
             windowDays: EDITORIAL_ROLLING_WINDOW_DAYS,
           })
         : { articles: [], evidenceItems: [] };
+      if (result.status === "failed") {
+        const issues = result.outcomes.flatMap((outcome) => outcome.issues);
+        const unavailableOnly =
+          issues.length > 0 &&
+          issues.every(
+            (issue) =>
+              issue.code === "COLLECTION_TIMEOUT" ||
+              issue.code === "SOURCE_UNAVAILABLE",
+          );
+        if (!unavailableOnly || historical.articles.length === 0) {
+          throw new DailyStepError(
+            issues.some((issue) => issue.code === "COLLECTION_TIMEOUT")
+              ? "COLLECTION_TIMEOUT"
+              : issues.some((issue) => issue.code === "SOURCE_UNAVAILABLE")
+                ? "SOURCE_UNAVAILABLE"
+                : "INVALID_SOURCE_DATA",
+            false,
+          );
+        }
+        result = historicalFallbackResult({ failedResult: result, historical });
+      }
       const historicalSourceIds = new Set(
         historical.articles.map((article) => article.sourceId),
       );
@@ -573,11 +607,15 @@ export function createSupabaseDailyStages(
       ) {
         throw new DailyStepError("INVALID_SOURCE_DATA", false);
       }
-      const resultWithHistory = carryRollingMaterials(
-        result,
-        historical,
-        new Set(sources.map((source) => source.sourceId)),
-      );
+      const resultWithHistory =
+        result.carriedCount === historical.articles.length &&
+        result.articles.length === historical.articles.length
+          ? result
+          : carryRollingMaterials(
+              result,
+              historical,
+              new Set(sources.map((source) => source.sourceId)),
+            );
       const writeInput = {
         runId: context.runId,
         stage: "collect" as const,
