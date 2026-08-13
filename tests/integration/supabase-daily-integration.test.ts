@@ -37,7 +37,6 @@ import {
   type SupabasePipelineWorkspaceStoredArtifact,
   type SupabasePublishInput,
   type SupabaseTopicPersistenceInput,
-  type SourceAttemptReservation,
 } from "../../src/repositories";
 
 const primarySource = RSS_SOURCE_REGISTRY[0];
@@ -480,19 +479,6 @@ function setup(sources: readonly SourceRegistryEntry[]) {
     store: new MemoryDailyRunRepository(),
     workspace,
     contentPersistence,
-    sourceAttempt: {
-      reserve: async (input: {
-        sourceId: string;
-        minIntervalMs: number;
-      }): Promise<SourceAttemptReservation> => ({
-        status: "allowed" as const,
-        sourceId: input.sourceId,
-        lastAttemptAt: "2026-08-13T00:00:00.000Z",
-        nextAllowedAt: new Date(
-          Date.parse("2026-08-13T00:00:00.000Z") + input.minIntervalMs,
-        ).toISOString(),
-      }),
-    },
     sources,
     collectSource: async (source: SourceRegistryEntry) => {
       collectorCalls += 1;
@@ -721,6 +707,29 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     expect(mutationRevisions).toEqual([...mutationRevisions].sort((a, b) => a - b));
   });
 
+  it("같은 날 수집 재실행을 출처 간격 저장소로 제한하지 않는다", async () => {
+    const fake = setup([primarySource]);
+    let reservationCalls = 0;
+    fake.options.sourceAttempt = {
+      reserve: async (input) => {
+        reservationCalls += 1;
+        return {
+          status: "too_soon" as const,
+          code: "TOO_SOON" as const,
+          sourceId: input.sourceId,
+          lastAttemptAt: "2026-08-13T00:00:00.000Z",
+          nextAllowedAt: "2026-08-14T00:00:00.000Z",
+        };
+      },
+    };
+
+    const result = await runSupabaseDailyPipeline(fake.options);
+
+    expect(result.status).toBe("executed");
+    expect(reservationCalls).toBe(0);
+    expect(fake.collectorCalls).toBe(1);
+  });
+
   it("독립 근거가 없으면 empty score를 영속화하고 모델과 발행을 호출하지 않는다", async () => {
     const fake = setup([primarySource]);
 
@@ -737,36 +746,22 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     expect(fake.receiptCalls).toBe(0);
   });
 
-  it("출처 예약이 거부되면 물리 수집과 이후 모델·발행을 모두 차단한다", async () => {
-    const fake = setup([primarySource]);
-    fake.options.sourceAttempt.reserve = async (input) => ({
-      status: "too_soon" as const,
-      code: "TOO_SOON" as const,
-      sourceId: input.sourceId,
-      lastAttemptAt: "2026-08-13T00:00:00.000Z",
-      nextAllowedAt: "2026-08-14T00:00:00.000Z",
-    });
-
-    const result = await runSupabaseDailyPipeline(fake.options);
-
-    expect(result.status).toBe("executed");
-    if (result.status !== "executed") return;
-    expect(result.journal.run.status).toBe("failed");
-    expect(result.journal.terminalReason).toBe("SOURCE_UNAVAILABLE");
-    expect(fake.collectorCalls).toBe(0);
-    expect(fake.provider.calls).toHaveLength(0);
-    expect(fake.ledger.prepareInputs).toHaveLength(0);
-    expect(fake.receiptCalls).toBe(0);
-  });
-
   it("당일 수집원이 모두 막혀도 최근 7일 자료가 있으면 수집 단계를 실패시키지 않는다", async () => {
     const fake = setup([primarySource, independentSource]);
-    fake.options.sourceAttempt.reserve = async (input) => ({
-      status: "too_soon" as const,
-      code: "TOO_SOON" as const,
-      sourceId: input.sourceId,
-      lastAttemptAt: "2026-08-13T00:00:00.000Z",
-      nextAllowedAt: "2026-08-14T00:00:00.000Z",
+    fake.options.collectSource = async (source) => ({
+      sourceId: source.sourceId,
+      status: "failed",
+      startedAt: "2026-08-13T00:00:00.000Z",
+      finishedAt: "2026-08-13T00:00:01.000Z",
+      items: [],
+      issues: [
+        {
+          code: "SOURCE_UNAVAILABLE",
+          message: "수집원 일시 장애",
+          retryable: false,
+          itemIndex: null,
+        },
+      ],
     });
     const articles = [primarySource, independentSource].map((source) =>
       normalizeArticle(articleFor(source), source),

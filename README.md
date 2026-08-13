@@ -319,7 +319,7 @@ npm run daily:dry-run
 npm run daily:memory
 ```
 
-이 명령은 네트워크로 등록된 공식 RSS를 한 번 읽지만 기사 제목·본문·근거 passage를 로그에 출력하지 않습니다. 네트워크 요청 직전에 Supabase 006 RPC가 등록부의 24시간 정책과 대조해 서버 시각으로 간격을 예약하며, 너무 이른 재실행은 `TOO_SOON`으로 중단합니다. 서로 다른 출처가 같은 주제를 직접 뒷받침하지 못하면 생성·게시 없이 보류하고 공개 DB에는 쓰지 않습니다.
+이 명령은 네트워크로 등록된 공식 RSS를 한 번 읽지만 기사 제목·본문·근거 passage를 로그에 출력하지 않습니다. 운영 수집·평가는 같은 날 다시 실행할 수 있으며, 중복 게시만 KST 발행일 고유 제약으로 차단합니다. 서로 다른 출처가 같은 주제를 직접 뒷받침하지 못하면 생성·게시 없이 보류하고 공개 DB에는 쓰지 않습니다.
 
 새 Supabase 프로젝트에서 공개 조회와 영속 자동화를 켜려면 `supabase/migrations`의 001~011을 번호 순서대로 적용한 뒤 다음 값을 `.env.local`에 설정합니다. 현재 연결된 기존 프로젝트에는 001~011이 적용돼 있습니다. 실제 키는 커밋하거나 `NEXT_PUBLIC_` 접두사로 노출하지 않습니다.
 
@@ -392,7 +392,7 @@ npm run build
 
 구현된 안전 경계는 HTTPS와 자격 증명 없는 URL, DNS의 IPv4·IPv6 로컬·사설·예약 대역 차단, 같은 origin으로 제한된 리다이렉트와 홉별 재검증, 응답 형식·크기·시간 제한, DTD·외부 엔티티 거부, 항목별 오류 격리입니다. 수집기가 예외를 던지거나 잘못된 source 결과를 반환해도 해당 출처의 실패로 바꾸고 다른 출처 처리를 계속합니다. DNS 검사와 실제 연결 사이의 재해석 가능성은 남아 있어 운영 전에는 주소 고정 전송 계층으로 한 번 더 강화합니다.
 
-Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을 대조하고, 실제 요청 직전에 PostgreSQL 서버 시각으로 `last_attempt_at`을 원자 예약합니다. `012`는 EC 디지털전략 RSS의 24시간 정책을, `020`과 `021`은 네이버 뉴스 매체별 발견 수집의 24시간 정책을, `023`은 새 국내 RSS 6개의 24시간 정책을 forward-only로 추가합니다. 실패한 요청도 간격을 소비하며 이른 중복 요청은 `TOO_SOON`으로 차단합니다. 메모리 운영 CLI와 `source:smoke`도 이 예약을 통과한 뒤에만 RSS를 호출하며 Supabase Secret Key나 적용된 RPC가 없으면 수집 전에 중단합니다. 보도자료 재작성본을 독립 출처로 잘못 세지 않도록 네이버 매체 도메인만으로 독립 보도라고 추정하지 않으며 모든 검색 매체를 `supporting`으로 둡니다.
+과거 Supabase `006`·`012`·`020`·`021`·`023` migration이 만든 출처 예약 테이블은 이력 보존을 위해 남아 있지만 운영 파이프라인과 메모리 CLI는 더 이상 이를 호출하지 않습니다. 수집·평가는 같은 날짜에도 다시 실행할 수 있고, 수집 실패가 호출 제한 시간을 소비하지 않습니다. 게시 단계만 `publication_date_kst` 고유 제약과 발행 트랜잭션으로 하루 한 건을 보장합니다. 보도자료 재작성본을 독립 출처로 잘못 세지 않도록 네이버 매체 도메인만으로 독립 보도라고 추정하지 않으며 모든 검색 매체를 `supporting`으로 둡니다.
 
 ### M3 — 선정·작성·품질 게이트
 
@@ -482,11 +482,11 @@ Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을
 
 ### M13 — 운영 연결과 배포 준비
 
-- 서버 전용 운영 조립은 공개 이력 조회 실패를 fail-closed하고, 허용된 RSS 등록부·24시간 예약·Gemini raw route·모델 예산·원자 발행·영수증 복구를 연결합니다.
+- 서버 전용 운영 조립은 공개 이력 조회 실패를 fail-closed하고, 허용된 RSS 등록부·Gemini raw route·모델 예산·원자 발행·영수증 복구를 연결합니다. 출처별 호출 간격 예약은 사용하지 않습니다.
 - Cron Route Handler는 `Authorization: Bearer CRON_SECRET`을 먼저 상수시간 비교한 뒤에만 DB와 모델 코드를 지연 로드합니다. 요청 query로 실행일을 지정할 수 없고 서버 KST 날짜만 사용하며, 함수 300초 한도 안에서 runner는 240초에 종료합니다.
 - Vercel Cron 설정은 매일 UTC 22:00, 한국시간 07:00에 `/api/cron/daily`을 호출합니다. 실패·차단은 HTTP 500, busy·기존 종료 실행은 멱등 결과로 응답하며 응답과 로그에 secret·기사 본문을 포함하지 않습니다.
 - 실제 공개 테스트는 `ALLOW_TEST_PUBLICATION=true`와 당일 KST `TEST_PUBLICATION_CONFIRM_DATE`가 모두 일치하고 대상 프로젝트가 고정된 경우에만 시작됩니다. 가짜 출처는 `.invalid`, 모델 비용은 숫자 0으로 기록하며 실제 Gemini·RSS 호출은 없습니다.
-- 실제 Supabase+RSS dry-run은 별도 CLI로 모델·publisher를 구조적으로 구성하지 않으며, 운영 프로젝트에서는 별도 production 확인값까지 요구합니다. dry-run도 당일 DB 실행 슬롯과 24시간 출처 간격을 소비하므로 live 전환 시험으로 같은 날짜에 연속 실행하지 않습니다.
+- 실제 Supabase+RSS dry-run은 별도 CLI로 모델·publisher를 구조적으로 구성하지 않으며, 운영 프로젝트에서는 별도 production 확인값까지 요구합니다. dry-run은 게시하지 않지만 영속 실행·수집 자료는 남기므로 운영 프로젝트가 아닌 preview 프로젝트에서 사용합니다.
 - 2026-08-13 테스트 게시물 `[개발용 테스트] 초등 AI 수업 확인` 1건을 정상 계보로 발행했고 공개 읽기와 로컬 홈·상세에서 확인했습니다. 이 글은 실제 뉴스가 아니며 해당 날짜의 한 건 슬롯을 사용했습니다.
 
 상태: **코드·DB·테스트 발행·Vercel Production·Cron·자동 게시 활성화 완료**. 해외 기사는 운영 근거에서 제외했고, 이용 조건이 확인되지 않은 국내 언론은 발견 정보만 사용합니다. 같은 사건을 직접 뒷받침하는 허용 근거가 부족하면 안전 보류됩니다. Production은 `https://schoolnews-neon.vercel.app`이며 Cron은 매일 UTC 15:00(KST 00:00)에 실행됩니다.
@@ -611,6 +611,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-14 | M21-CRON-RESET-002 | 최민재(루트) | 최민재 | 운영 자동 평가 시각을 매일 KST 05:00으로 변경하고, 게시·모델 호출이 없던 8월 14일 테스트 실행만 조건부 초기화해 같은 날 새 Cron 실행 가능 상태로 복구 | `vercel.json`, `supabase/migrations/202608140027_*`, `tests/backend/*cron*`, `README.md` | 027 원격 적용 후 `get_daily_run(2026-08-14)=null`, 게시·모델 활동 시 초기화 거부 회귀, cron·reset 4 tests, typecheck·lint·diff-check 통과 | 05:00 Production Cron 실행 결과 확인 |
 | 2026-08-14 | M21-ROLLING-RECOVERY-003 | 최민재(루트) | 최민재 | 당일 수집원이 호출 제한·일시 장애로 모두 실패해도 최근 7일의 영속 자료가 있으면 평가를 계속하고, 수집기 예외를 데이터 오류가 아닌 수집원 장애로 분류하도록 복구 경계 개선 | `src/pipeline/orchestrator/**`, `supabase/migrations/202608140028_*`, `tests/{backend,integration}/**`, `README.md` | rolling fallback·오류 분류 14 tests, typecheck·lint·diff-check 통과; 게시·주제·아티팩트·모델 기록이 없는 failed run만 reset 허용 | Production 배포 후 오늘 rolling 자료 기반 재실행 결과 확인 |
 | 2026-08-14 | M21-CRON-0900-004 | 최민재(루트) | 최민재 | 운영 자동 평가 시각을 매일 KST 09:00으로 변경 | `vercel.json`, `tests/backend/vercel-cron-schedule.test.ts`, `src/pipeline/orchestrator/editorial-source-date.ts`, `README.md` | UTC 변환 `0 0 * * *` 회귀, typecheck·lint·diff-check | 오늘 09:00 Production Cron 실행 결과 확인 |
+| 2026-08-14 | M21-UNLIMITED-COLLECTION-005 | 최민재(루트) | 최민재 | 운영·메모리 파이프라인에서 출처별 24시간 예약을 제거해 같은 날 수집·평가를 재실행할 수 있게 하고, 중복 게시만 발행일 고유 제약으로 유지 | `src/{lib/ops,pipeline/orchestrator}/**`, `scripts/run-{memory-daily-pipeline,supabase-dry-run}.ts`, `tests/integration/**`, `README.md` | 같은 날 수집기 직접 호출 회귀, typecheck·lint·diff-check | DB의 과거 예약 테이블은 호환 이력으로만 유지 |
 
 ## 현재 상태
 

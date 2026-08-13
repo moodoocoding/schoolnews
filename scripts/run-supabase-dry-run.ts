@@ -4,7 +4,6 @@ import {
   createConfiguredSupabaseDailyRunRepository,
   createConfiguredSupabasePipelineWorkspaceRepository,
   createConfiguredSupabasePublicationHistoryRepository,
-  createConfiguredSupabaseSourceAttemptRepository,
 } from "../src/db/supabase/server";
 import { collectRssSource, RSS_SOURCE_REGISTRY } from "../src/pipeline/collectors";
 import { runSupabaseDailyPipeline } from "../src/pipeline/orchestrator";
@@ -41,7 +40,6 @@ if (
 const dailyRun = createConfiguredSupabaseDailyRunRepository(environment);
 const contentPersistence =
   createConfiguredSupabaseContentPersistenceRepository(environment);
-const sourceAttempt = createConfiguredSupabaseSourceAttemptRepository(environment);
 const historyRepository =
   createConfiguredSupabasePublicationHistoryRepository(environment);
 const workspace = createConfiguredSupabasePipelineWorkspaceRepository(environment, {
@@ -59,7 +57,6 @@ const result = await runSupabaseDailyPipeline({
   store: dailyRun,
   workspace,
   contentPersistence,
-  sourceAttempt,
   sources: RSS_SOURCE_REGISTRY,
   collectSource: (source, signal) => collectRssSource(source, { signal }),
   collectionConfigurationId: "licensed-production-sources-v2",

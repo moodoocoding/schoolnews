@@ -5,11 +5,9 @@ import type {
   EvidenceItem,
   GenerationBudget,
   GenerationUsage,
-  SourceCollectionOutcome,
   SourceRegistryEntry,
 } from "../../contracts";
 import {
-  sourceCollectionOutcomeSchema,
   sourceRegistryEntrySchema,
 } from "../../contracts";
 import {
@@ -146,7 +144,11 @@ export interface CreateSupabaseDailyStagesOptions {
     | "persistSelectedTopic"
     | "persistEmptyTopicSelection"
   >;
-  sourceAttempt: Pick<SupabaseSourceAttemptRepository, "reserve">;
+  /**
+   * Deprecated compatibility input. Collection no longer calls this
+   * repository or enforces a persisted minimum interval.
+   */
+  sourceAttempt?: Pick<SupabaseSourceAttemptRepository, "reserve">;
   publisher?: Pick<SupabasePublisherRepository, "publish">;
   publishReceipt?: Pick<SupabasePublishReceiptRepository, "get">;
   sources: readonly SourceRegistryEntry[];
@@ -382,25 +384,6 @@ function historicalFallbackResult(input: {
   };
 }
 
-function tooSoonOutcome(source: SourceRegistryEntry): SourceCollectionOutcome {
-  const now = new Date().toISOString();
-  return sourceCollectionOutcomeSchema.parse({
-    sourceId: source.sourceId,
-    status: "failed",
-    startedAt: now,
-    finishedAt: now,
-    items: [],
-    issues: [
-      {
-        code: "SOURCE_UNAVAILABLE",
-        message: "수집원 최소 호출 간격이 아직 지나지 않았습니다.",
-        retryable: false,
-        itemIndex: null,
-      },
-    ],
-  });
-}
-
 function topicTitle(
   articles: readonly { articleId: string; title: string; publishedAt: string }[],
   articleIds: readonly string[],
@@ -553,16 +536,7 @@ export function createSupabaseDailyStages(
           previousPostTitles,
           previousContentFingerprints,
           abortSignal: context.signal,
-          collectSource: async (source, signal) => {
-            const reservation = await options.sourceAttempt.reserve({
-              sourceId: source.sourceId,
-              minIntervalMs: source.requestPolicy.minIntervalMs,
-            });
-            if (reservation.status === "too_soon") {
-              return tooSoonOutcome(source);
-            }
-            return options.collectSource(source, signal);
-          },
+          collectSource: (source, signal) => options.collectSource(source, signal),
         });
       } catch (error) {
         if (error instanceof NewsIngestionAbortedError) {

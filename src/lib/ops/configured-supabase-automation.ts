@@ -97,7 +97,6 @@ export async function runConfiguredSupabaseAutomation(input: {
     store: repositories.dailyRun,
     workspace: repositories.workspace,
     contentPersistence: repositories.contentPersistence,
-    sourceAttempt: repositories.sourceAttempt,
     editorialMaterials: repositories.editorialMaterials,
     publisher: repositories.publisher,
     publishReceipt: repositories.publishReceipt,
