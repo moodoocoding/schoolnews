@@ -19,7 +19,12 @@ export function SiteHeader({ isHome = false }: { isHome?: boolean }) {
             AI 교육, 오늘
           </Link>
         )}
-        <span className={styles.dailyBadge}>매일 한 편</span>
+        <nav aria-label="주요 탐색" className={styles.headerNavigation}>
+          <Link href="/archive">이전 기록</Link>
+          <span aria-hidden="true" className={styles.dailyBadge}>
+            매일 한 편
+          </span>
+        </nav>
       </div>
       <p className={styles.tagline}>
         {tagline}
