@@ -593,6 +593,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M15-ARTICLE-EDITORIAL-DEPLOY-004 | 최민재(루트) | 최민재 | 편집형 상세와 `generated-post-v3` 품질 기준을 GitHub `main`과 Vercel Production에 반영 | GitHub `62a8479`, `https://schoolnews-neon.vercel.app` | 운영 8월 1일 글 본문 4문단·상세 border 1px·header shadow 0, 390px 가로 넘침 0·오류/경고 0 | 기존 본문 사실 분량은 불변, 향후 생성분부터 170자 최소 게이트 적용 |
 | 2026-08-13 | M16-EDITORIAL-DATE-LENGTH-001 | 최민재(루트) | 최민재 | 발행일 D-2의 KST 기사만 편집 후보로 넘기고 순수 본문을 최소 3문단·600~1000자(800자 권고)로 강제 | `src/{contracts,prompts,pipeline}/**`, `tests/{content,fixtures,integration}/**`, `README.md` | 날짜 경계·본문 600/1000 경계·일일 stage 회귀, 전체 검사 | 기존 공개 백필 원고는 새 기준에 맞춘 별도 재생성 필요 |
 | 2026-08-13 | M16-AUGUST-FIRST-REVISION-002 | 최민재(루트) | 최민재 | 8월 1일 공개 글을 7월 30일 실제 독립 보도 2건에 근거한 기사형 원고로 교체하고 기존 post·slug·과거 revision을 보존한 채 새 불변 revision으로 원자 발행 | `supabase/migrations/202608130014_*`, `scripts/revise-august-first-editorial.ts`, `tests/backend/august-first-editorial-revision-schema.test.ts`, `README.md` | 운영 RPC 적용 성공, 본문 996자·3문단, 출처 2건 모두 2026-07-30, 운영 상세 제목·본문 4개 표시 문단·출처 링크 2개 확인 | 014는 SQL Editor 수동 적용이므로 CLI migration history 대조 필요 |
+| 2026-08-13 | M16-DOMESTIC-SOURCE-CORRECTION-003 | 최민재(루트) | 최민재 | 해외 기사 사용을 중단하고 자동 수집 등록부를 국내 출처로 제한했으며, 8월 1일 글을 7월 30일 한국교육신문·뉴스1 보도만으로 다시 작성 | `src/pipeline/collectors/**`, `supabase/migrations/202608130015_*`, `scripts/revise-august-first-domestic-editorial.ts`, `tests/{backend,integration}/**`, `README.md` | 국내 등록부·주제선정·교정 RPC 21 tests, typecheck·lint·diff-check 통과; 본문 827자·3문단 | 이용 허락과 독립성이 확인된 국내 교육언론 RSS 추가 필요 |
 
 ## 현재 상태
 
@@ -605,15 +606,15 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 투영의 개발용 테스트 게시물 1건을 갤러리와 상세에서 확인했습니다.
 - Supabase: 기존 프로젝트에 001~012를 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, MSIT·EC 24시간 예약, 모델 호출 intent·실제 사용량 예산 장부, 게시 이력과 발행 영수증 조정 RPC가 존재합니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`과 Vercel Production 환경에만 저장합니다. 대화 중 노출된 초기 서버 키는 별도의 Vercel 운영 키로 교체하고 폐기했습니다. SQL Editor 수동 적용 내역은 CLI migration ledger에 자동 기록되지 않으므로 `db push/repair/include-all`은 이력 대조 전 사용하지 않습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
-- 실제 뉴스 수집: MSIT 공식 RSS와 EC 디지털전략 RSS에서 안전한 메타데이터·짧은 teaser 수집, 정규화, 중복 제거, 멱등 저장, 후보 점수·근거 후보 생성까지 연결했습니다. EC 실제 스모크는 10건·오류 0이었습니다.
+- 실제 뉴스 수집: 해외 기사 사용을 중단하고 국내 과기정통부 공식 RSS만 활성 등록부에 남겼습니다. 안전한 메타데이터·짧은 요약 수집, 정규화, 중복 제거, 멱등 저장, 후보 점수·근거 후보 생성까지 연결했으며, 이용 허락과 독립성이 확인된 국내 교육언론 RSS가 추가되기 전에는 독립 근거 부족으로 무발행될 수 있습니다.
 - 후보 점수와 생성 품질 게이트: 한국어·영어 신호와 제한된 교차언어 개념 묶음, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현했습니다. 학생·보호자 식별 패턴이나 전체 근거 6,000 grapheme 초과 시 모델 호출 전에 보류합니다.
 - 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory, 서버 전용 운영 조립, 인증 우선 Cron endpoint와 KST 07:00 스케줄을 Production에 활성화했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. Vercel의 `AUTOMATION_MODE=live`, Supabase 서버 전용 키, Gemini opt-in과 `CRON_SECRET`은 Production 환경에만 있으며 Git에 저장하지 않습니다.
 - 통합 검증: ESLint 경고 0, TypeScript 통과, 63개 파일 449개 테스트, 프로덕션 빌드와 npm audit 취약점 0을 확인했습니다. 실제 Supabase에서 fixture collect·score, 2개 model audit, validate·publish·receipt까지 성공했고 공개 Data API와 브라우저 노출을 확인했습니다. Production 재배포 `GZ2gpUBkbB91g9GfasnX6YWkC91R`가 Ready이며 홈 제목·개발용 게시물 카드·상세 네 영역·출처 2개를 실제 운영 도메인에서 확인했습니다. 실제 Gemini와 실제 RSS는 이 발행 시험에서 호출하지 않았습니다.
 - Cron 운영 검증: Vercel Cron Jobs가 Enabled이고 `/api/cron/daily`가 `0 22 * * *`에 등록됐습니다. 인증 없는 실제 Production 요청은 HTTP 401과 `{ "ok": false, "code": "UNAUTHORIZED" }`로 차단됐습니다. 대시보드의 즉시 실행과 임의 인증 헤더 주입은 브라우저 보안 정책으로 실행하지 않았으며, 다음 KST 07:00 스케줄을 최초 운영 예약 실행으로 관찰합니다. 오늘은 이미 테스트 게시물 한 건이 KST 날짜 고유 슬롯을 사용했으므로 추가 게시물을 강제로 만들지 않았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. EC는 관련성이 높은 글로벌 피드지만 매일 한국 초등 AI 교육 기사와 같은 사건을 제공하지 않으므로 무발행일은 정상입니다. canonical survivor, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
+- 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. 현재 활성 국내 출처가 공식 RSS 한 곳뿐이어서 독립 근거가 없으면 무발행하는 것이 정상입니다. canonical survivor, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
 - 007은 호출·입력·출력·비용을 모델 호출 전에 영속 예약하고 실제 audit를 exact 합계로 결속합니다. 다만 공급자 성공 후 audit finalize와 generation artifact 저장 사이에 중단되면 모델을 중복 호출하지 않는 대신 생성 본문을 자동 복원하지 못해 해당 실행을 안전 보류합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 
-운영 Cron은 매일 KST 07:00에 두 RSS를 수집하고, 같은 사건의 독립 근거·점수·개인정보·생성·의미·발행 품질 기준을 모두 통과한 경우에만 한 건을 게시합니다. 기준 자체를 낮추거나 허락 없는 매체를 넣지 않으며, 후보가 없으면 기존 최신 글을 그대로 유지합니다.
+운영 Cron은 매일 KST 07:00에 국내 허용 RSS만 수집하고, 같은 사건의 독립 근거·점수·개인정보·생성·의미·발행 품질 기준을 모두 통과한 경우에만 한 건을 게시합니다. 해외 기사, 기준을 낮춘 단일 출처, 허락 없는 매체를 넣지 않으며 후보가 없으면 기존 최신 글을 그대로 유지합니다.

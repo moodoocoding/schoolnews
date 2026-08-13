@@ -106,15 +106,8 @@ function truncate(value: string, maximum: number): string {
 }
 
 function preferredExcerpt(rawExcerpt: string, source: SourceRegistryEntry): string {
-  if (source.sourceId !== "ec-digital-strategy") {
-    return stripMarkupToPlainText(rawExcerpt);
-  }
-
-  const decoded = decodeCharacterReferences(rawExcerpt);
-  const teaser = /<p\b[^>]*class=["'][^"']*\becl-page-header-standardised__description\b[^"']*["'][^>]*>([\s\S]*?)<\/p>/i.exec(
-    decoded,
-  )?.[1];
-  return stripMarkupToPlainText(teaser ?? "");
+  void source;
+  return stripMarkupToPlainText(rawExcerpt);
 }
 
 function resolveArticleLink(item: XmlRecord, baseUrl: string): string | null {

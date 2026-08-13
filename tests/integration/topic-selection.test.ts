@@ -13,10 +13,6 @@ import {
 import { createRssExcerptEvidenceItems } from "../../src/pipeline/retrieval";
 
 const primarySource = RSS_SOURCE_REGISTRY[0];
-const ecIndependentSource = RSS_SOURCE_REGISTRY.find(
-  (source) => source.sourceId === "ec-digital-strategy",
-);
-if (!ecIndependentSource) throw new Error("EC independent source expected");
 const independentSource: SourceRegistryEntry = sourceRegistryEntrySchema.parse({
   ...primarySource,
   sourceId: "independent-education-news",
@@ -91,64 +87,25 @@ describe("M5 결정론적 오늘의 주제 선정", () => {
     expect(result.status === "selected" && result.evidenceItems).toHaveLength(2);
   });
 
-  it("CC BY 4.0 독립 기관 자료도 다른 원출처의 연구 근거로 선정할 수 있다", () => {
+  it("국내 독립 보도라도 다른 사건이면 공식 자료와 합치지 않는다", () => {
     const articles = [
       normalizeArticle(inputFor(primarySource), primarySource),
       normalizeArticle(
-        inputFor(ecIndependentSource, {
-          originalUrl: `${ecIndependentSource.siteUrl}en/news/primary-school-ai-guidelines`,
-          title:
-            "Guidelines for privacy and safety in primary school AI digital education",
-          excerpt:
-            "The guidelines help primary school teachers protect pupils' privacy and safety when using artificial intelligence in digital education.",
+        inputFor(independentSource, {
+          originalUrl: `${independentSource.siteUrl}news/university-supercomputer`,
+          title: "대학 슈퍼컴퓨터 연구 지원 확대",
+          excerpt: "대학 고성능 컴퓨팅 연구 사업에 새로운 지원 계획이 발표됐습니다.",
         }),
-        ecIndependentSource,
+        independentSource,
       ),
     ];
     const result = selectDailyTopic({
       articles,
       evidenceItems: createRssExcerptEvidenceItems({
         articles,
-        sourceRegistryEntries: [primarySource, ecIndependentSource],
+        sourceRegistryEntries: [primarySource, independentSource],
       }),
-      sources: [primarySource, ecIndependentSource],
-    });
-
-    expect(result.status).toBe("selected");
-    expect(result.status === "selected" && result.candidate.evidencePolicy).toBe(
-      "primary_plus_independent",
-    );
-    expect(
-      result.status === "selected" &&
-        result.evidenceItems.some(
-          (item) =>
-            item.sourceId === "ec-digital-strategy" &&
-            item.sourceType === "research" &&
-            item.sourceRole === "independent",
-        ),
-    ).toBe(true);
-  });
-
-  it("영문 독립 자료라도 다른 사건이면 한국어 공식 자료와 합치지 않는다", () => {
-    const articles = [
-      normalizeArticle(inputFor(primarySource), primarySource),
-      normalizeArticle(
-        inputFor(ecIndependentSource, {
-          originalUrl: `${ecIndependentSource.siteUrl}en/news/university-supercomputer`,
-          title: "University supercomputer research funding expands",
-          excerpt:
-            "A university research programme announced new funding for high-performance computing.",
-        }),
-        ecIndependentSource,
-      ),
-    ];
-    const result = selectDailyTopic({
-      articles,
-      evidenceItems: createRssExcerptEvidenceItems({
-        articles,
-        sourceRegistryEntries: [primarySource, ecIndependentSource],
-      }),
-      sources: [primarySource, ecIndependentSource],
+      sources: [primarySource, independentSource],
     });
 
     expect(result.status).toBe("none");
