@@ -275,7 +275,7 @@ LLM은 제공된 근거 passage와 허용된 기사 원문을 쉬운 한국어�
 - `MemoryPipelineWorkspaceRepository`는 `collect → news_ingestion`, `score → topic_selection`, `generate → post_generation` 조합만 허용하고, payload·설정·부모 참조를 포함한 SHA-256 출력 참조를 생성합니다.
 - 같은 실행 단계의 산출물은 덮어쓰지 않습니다. 재개 시 현재 설정 지문과 정확한 부모 참조가 모두 일치해야만 기존 산출물을 사용하며, 불일치는 `PIPELINE_VERSION_MISMATCH`로 차단합니다.
 - 주제 선정은 제목 유사도 또는 제한된 한국어·영어 개념 유사도가 그룹의 모든 기사와 기준 이상인 경우에만 같은 사건으로 묶습니다. 입력 순서와 무관하게 근거를 정렬하며 공식 자료+독립 기관·연구·보도 또는 서로 다른 독립 출처 두 건을 직접 확인한 그룹만 통과시킵니다.
-- 운영 발견 수집은 과기정통부 공식 RSS와 네이버 뉴스 검색 API 메타데이터를 사용합니다. 네이버 검색은 `초등 AI 디지털 교육`, `교사 생성형 AI 교육`뿐 아니라 AI 에이전트·개인정보·저작권, 딥페이크·아동·청소년, 새로운 디지털 기술의 교육 영향을 찾는 제한된 질의를 하루 한 번 실행합니다. 검색 결과의 Naver 호스팅 URL은 원문 수집 후보로 보존하지만, 출처별 원문 이용 허락이 등록되지 않으면 검색 요약·기사 본문·이미지·유료 콘텐츠를 저장하거나 모델에 보내지 않습니다. 따라서 현재 이 정보만으로는 독립 근거 요건을 충족하거나 게시물을 생성할 수 없습니다.
+- 운영 발견 수집은 국내 공식 RSS 6개, 뉴시스 IT·바이오 discovery RSS 1개와 네이버 뉴스 검색 API 메타데이터를 사용합니다. 공식 근거 후보는 과기정통부·한국교육개발원·보건복지부·KISA 보호나라·한국콘텐츠진흥원이며, KISA 보도자료와 뉴시스 RSS는 제목·링크·날짜만 발견 정보로 저장합니다. 네이버 검색은 초등·교사뿐 아니라 에듀테크, 아동 개인정보, 디지털 웰빙, 저작권, 접근성·미디어 리터러시와 새로운 디지털 기술의 교육 영향을 찾는 제한된 질의 11개를 하루 한 번 실행합니다. 검색 결과의 Naver 호스팅 URL은 원문 수집 후보로 보존하지만, 출처별 원문 이용 허락이 등록되지 않으면 검색 요약·기사 본문·이미지·유료 콘텐츠를 저장하거나 모델에 보내지 않습니다. 따라서 발견 정보만으로는 독립 근거 요건을 충족하거나 게시물을 생성할 수 없습니다.
 - 독립 출처를 주입한 통합 테스트에서는 기존 fake 생성 공급자와 fake 의미 평가기로 생성·품질 흐름을 검증합니다. 생성 산출물 저장 직후 체크포인트 중단도 재현해 외부 호출 없이 산출물을 재사용하고 모델 사용량을 정확히 한 번 합산합니다.
 - 이 수직 절편은 프로세스 메모리에만 쓰고 `publish` 단계를 포함하지 않습니다. Supabase, 실제 LLM, 웹 공개 저장소에는 쓰지 않습니다.
 - 메모리 workspace 자체는 lease fence와 원자 결합되지 않습니다. 실제 장시간 모델 호출과 영속 저장을 연결하기 전에는 호출 intent·fence CAS 또는 공급자 멱등 장부가 필요합니다.
@@ -376,20 +376,21 @@ npm run build
 
 #### 현재 수집원과 이용 정책
 
-- 한국 1차 출처는 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94`입니다. 공식 RSS 안내를 확인했고 최소 간격은 24시간, 한 번에 최대 50건, 15초 제한, 1.5MB 응답 상한입니다. 2026-08-13 실제 1회 측정에서 첫 바이트 6.824초, 전체 9.828초, 700,119바이트로 확인돼 기존 10초 제한을 유한하게 조정했습니다. DNS·응답 시작·본문 읽기 timeout을 구분하고 멈춘 본문 reader를 직접 취소합니다.
+- 국내 RSS 활성 등록부는 과학기술정보통신부, 한국교육개발원, KISA 보도자료, 보건복지부, KISA 보호나라 보고서·가이드, 한국콘텐츠진흥원 연구보고서, 뉴시스 IT·바이오의 7개 피드입니다. KISA 보도자료와 뉴시스는 `discovery_only`라 `description/summary`도 버리고 제목·링크·날짜만 저장합니다. 나머지 공식 피드는 짧은 RSS 설명을 근거 후보로 쓸 수 있지만, 효과·인과·전망을 공식기관 한 곳만으로 발행하지 않습니다.
+- 과학기술정보통신부 공식 보도자료 RSS `https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94`는 최소 간격 24시간, 한 번에 최대 50건, 15초 제한, 1.5MB 응답 상한입니다. 2026-08-13 실제 1회 측정에서 첫 바이트 6.824초, 전체 9.828초, 700,119바이트로 확인돼 기존 10초 제한을 유한하게 조정했습니다. DNS·응답 시작·본문 읽기 timeout을 구분하고 멈춘 본문 reader를 직접 취소합니다.
 - 독립 기관·연구 출처는 EU 집행위원회 디지털전략 RSS `https://digital-strategy.ec.europa.eu/en/rss.xml`입니다. EU 법적 고지 `https://commission.europa.eu/legal-notice_en`의 CC BY 4.0 재사용 조건과 `robots.txt`를 확인했습니다. 최소 간격 24시간, 최대 25건, 15초, 500KB 상한이며 이미지·캡션·전체 HTML 대신 페이지 헤더의 짧은 teaser만 최대 800자로 정제합니다. 이는 한국 기관과 제도적으로 독립된 공공 연구·정책 출처이지 독립 언론이라는 뜻은 아닙니다.
 - 2026-08-13 Supabase 012 정책을 적용하고 EC RSS를 서버 예약 뒤 실제 1회 수집해 10건·오류 0을 확인했습니다. 기사 내용은 로그에 남기지 않았고 Gemini·발행 호출은 각각 0회였습니다. 즉시 재예약은 `TOO_SOON`으로 차단됐습니다.
 - 피드의 `title`, `link`, `pubDate`, 짧은 `description`만 읽습니다. 실제 피드의 매우 긴 `content:encoded`, HWP 변환 JSON, 이미지, 첨부파일과 상세 `/bbs` 본문은 저장하거나 추가 크롤링하지 않습니다.
 - 날짜만 제공하는 `YYYY.MM.DD` 값은 KST 자정 시각으로 변환하고 `publishedAtPrecision: "date"`로 원래 정밀도를 보존합니다.
 - 2026-08-13 재조사에서 교육플러스 전체 RSS와 AI타임스 교육 RSS가 정상 응답했지만 각각 `All rights reserved`·무단전재 금지 또는 사전승낙 없는 복제·전송 금지 조건이라 `needs_review`로 유지했습니다. 에듀프레스는 GPTBot 전면 차단과 `All rights reserved`를 확인해 초기 제외했습니다. 공개 RSS와 robots 허용은 AI 재가공 라이선스가 아니므로 세 매체 모두 서면허락 전 운영 등록부·LLM 입력·공개 재가공에 넣지 않습니다.
-- 연합뉴스·동아일보·조선일보 등 언론사의 RSS 또는 네이버 뉴스 검색 노출 여부도 재가공·AI 학습 허락을 뜻하지 않습니다. 현재 언론 매체는 모두 `discovery_only`로 취급하며 제목·원문 링크·발행일만 주제 발견에 보존합니다. 검색 요약과 RSS description, 기사 본문은 Gemini나 공개 원고의 근거로 보내지 않고, 원문 링크는 사람이 확인할 수 있는 참고 경로로만 유지합니다.
+- 연합뉴스·동아일보·조선일보 등 언론사의 RSS 또는 네이버 뉴스 검색 노출 여부도 재가공·AI 학습 허락을 뜻하지 않습니다. 현재 언론 매체는 모두 `discovery_only`로 취급하며 제목·원문 링크·발행일만 주제 발견에 보존합니다. IT동아는 공식 RSS가 실제 응답하지만 `robots.txt`가 `/feeds/`를 차단해 비활성입니다. 뉴시스 IT·바이오 공식 RSS는 발견용으로만 활성화했습니다. 검색 요약과 discovery RSS description, 기사 본문은 Gemini나 공개 원고의 근거로 보내지 않고, 원문 링크는 사람이 확인할 수 있는 참고 경로로만 유지합니다.
 - 정책브리핑 RSS는 2026년 7월 1일 공식 중단됐고, 교육부와 KERIS는 검증 가능한 공개 RSS/API를 찾지 못해 HTML 크롤링으로 우회하지 않았습니다.
 - 과기정통부 공공데이터 OpenAPI는 무료·자동 승인 후보지만 키가 필요하므로 현재 연결하지 않았습니다. 추후 사용하면 RSS와 같은 기관으로 묶어 독립 출처 두 개로 계산하지 않습니다.
 - 공식 발표 한 건은 발표일·대상 같은 직접 사실의 후보일 뿐, 효과·현장 반응·안전성·전망을 단독으로 뒷받침하지 않습니다. 독립 출처가 없으면 게시를 보류합니다.
 
 구현된 안전 경계는 HTTPS와 자격 증명 없는 URL, DNS의 IPv4·IPv6 로컬·사설·예약 대역 차단, 같은 origin으로 제한된 리다이렉트와 홉별 재검증, 응답 형식·크기·시간 제한, DTD·외부 엔티티 거부, 항목별 오류 격리입니다. 수집기가 예외를 던지거나 잘못된 source 결과를 반환해도 해당 출처의 실패로 바꾸고 다른 출처 처리를 계속합니다. DNS 검사와 실제 연결 사이의 재해석 가능성은 남아 있어 운영 전에는 주소 고정 전송 계층으로 한 번 더 강화합니다.
 
-Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을 대조하고, 실제 요청 직전에 PostgreSQL 서버 시각으로 `last_attempt_at`을 원자 예약합니다. `012`는 EC 디지털전략 RSS의 24시간 정책을, `020`과 `021`은 네이버 뉴스 매체별 발견 수집의 24시간 정책을 forward-only로 추가합니다. 실패한 요청도 간격을 소비하며 이른 중복 요청은 `TOO_SOON`으로 차단합니다. 메모리 운영 CLI와 `source:smoke`도 이 예약을 통과한 뒤에만 RSS를 호출하며 Supabase Secret Key나 적용된 RPC가 없으면 수집 전에 중단합니다. 보도자료 재작성본을 독립 출처로 잘못 세지 않도록 기사 단위 upstream provenance와 이용 권한을 확인할 수 없는 신규 언론 소스는 발행 근거로 승격하지 않습니다.
+Supabase `006` migration은 DB에 고정한 출처별 정책과 호출자 값을 대조하고, 실제 요청 직전에 PostgreSQL 서버 시각으로 `last_attempt_at`을 원자 예약합니다. `012`는 EC 디지털전략 RSS의 24시간 정책을, `020`과 `021`은 네이버 뉴스 매체별 발견 수집의 24시간 정책을, `023`은 새 국내 RSS 6개의 24시간 정책을 forward-only로 추가합니다. 실패한 요청도 간격을 소비하며 이른 중복 요청은 `TOO_SOON`으로 차단합니다. 메모리 운영 CLI와 `source:smoke`도 이 예약을 통과한 뒤에만 RSS를 호출하며 Supabase Secret Key나 적용된 RPC가 없으면 수집 전에 중단합니다. 보도자료 재작성본을 독립 출처로 잘못 세지 않도록 네이버 매체 도메인만으로 독립 보도라고 추정하지 않으며 모든 검색 매체를 `supporting`으로 둡니다.
 
 ### M3 — 선정·작성·품질 게이트
 
@@ -603,6 +604,7 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 | 2026-08-13 | M18-NAVER-MIDNIGHT-001 | 최민재(루트) | 최민재 | 자동 발행을 매일 KST 00:00로 변경하고 네이버 뉴스 검색 API 메타데이터 기반 국내 매체 수집을 추가; 직접 교육 뉴스와 새로운 디지털 기술의 교육 영향 후보를 함께 선정하며 자동 원고를 정확히 3문단·400~650자(450~550자 권고)로 조정 | `vercel.json`, `src/{contracts,lib/ops,pipeline,prompts}/**`, `tests/{backend,content}/**`, `README.md` | 네이버 허용 도메인·검색 요약 권한 강등·기술 영향 브리지·UTC/KST Cron·본문 경계 회귀 및 전체 검사 | 검색 API는 본문 크롤러가 아니며 검색 passage 밖 사실 생성 금지; 내일 자정 첫 운영 실행 로그 확인 |
 | 2026-08-13 | M18-DISCOVERY-RIGHTS-002 | 최민재(루트) | 최민재 | 연합뉴스·동아일보·조선일보 등 언론 검색 결과를 `discovery_only`로 격리하고 제목·원문 링크·발행일만 보존; 검색 요약·RSS description·본문을 Gemini 입력과 발행 근거에서 제외 | `src/{contracts,pipeline}/**`, `supabase/migrations/202608130021_*`, `tests/backend/**`, `README.md` | discovery-only 근거 생성 0건, 조선일보 24시간 정책, typecheck·lint·전체 test·build·Production 검증 | 이용 허락이 확인된 국내 독립 근거 출처가 없으면 당일 게시를 안전 보류 |
 | 2026-08-13 | M19-FULLTEXT-GENERATION-001 | 최민재(루트) | 김도윤·이현우·최민재 | Naver 호스팅 URL 후보에서 권한 등록부·robots·고정 origin을 통과한 원문만 private 보존하고, 선정 근거와 1:1인 원문을 Gemini 생성·의미평가에 전달하는 fail-closed 경계 구현 | `src/{contracts,db,pipeline,prompts,repositories}/**`, `supabase/migrations/202608130022_*`, `tests/**`, `package*.json`, `README.md` | 81 files / 504 tests, typecheck·lint·build·diff-check 통과; 원문 없음/변조/만료/PII/계보·robots 차단 회귀 | 출처별 서면 허락 전 운영 policy registry 비활성, 022 실제 PG compile·적용, collect artifact와 원문 저장의 crash-gap 원자화, DNS pinning, purge 스케줄 |
+| 2026-08-14 | M20-SOURCE-EXPANSION-001 | 최민재(루트) | 김도윤·박서연·최민재 | 국내 공식 RSS 6개와 뉴시스 discovery RSS, 네이버 기술·아동·권리 검색 질의 11개로 수집 통로 확장; discovery 본문·요약 폐기와 매체 도메인 독립성 승격 금지 | `src/pipeline/collectors/**`, `supabase/migrations/202608140023_*`, `tests/backend/**`, `README.md` | 실제 RSS HTTPS/XML 응답과 robots 검토; 운영 DB 정책 6행(24시간) 적용·조회; 82 files / 510 tests, typecheck·lint·build·diff-check | 언론 원문은 별도 이용 허락 전 Gemini 입력 금지 |
 
 ## 현재 상태
 
@@ -615,14 +617,14 @@ Git은 세부 파일 차이를 보존하고 README는 사람이 이해할 수 �
 - 실행 가능한 애플리케이션: 메모리 샘플과 Supabase 기반 메인·상세 화면 구현 완료. 로컬 선택값은 `supabase`이며 공개 투영의 개발용 테스트 게시물 1건을 갤러리와 상세에서 확인했습니다.
 - Supabase: 기존 프로젝트에 001~012를 적용해 private schema·공개 투영·RLS, server-clock 일일 실행/발행, immutable workspace, collect/topic 원자 저장, Gemini route 감사, MSIT·EC 24시간 예약, 모델 호출 intent·실제 사용량 예산 장부, 게시 이력과 발행 영수증 조정 RPC가 존재합니다. URL·publishable·server secret key는 Git에서 제외된 `.env.local`과 Vercel Production 환경에만 저장합니다. 대화 중 노출된 초기 서버 키는 별도의 Vercel 운영 키로 교체하고 폐기했습니다. SQL Editor 수동 적용 내역은 CLI migration ledger에 자동 기록되지 않으므로 `db push/repair/include-all`은 이력 대조 전 사용하지 않습니다.
 - Firestore: 이전 구현은 이력 보존용이며 활성 운영 경로가 아님
-- 실제 뉴스 수집: 국내 과기정통부 공식 RSS와 네이버 뉴스 검색 메타데이터를 사용합니다. 네이버 호스팅 본문 파서와 private 보존 RPC는 구현했지만 출처별 원문 이용 허용 등록부는 현재 비어 있습니다. 따라서 운영에서는 네이버 본문 네트워크 요청·저장·Gemini 전송이 모두 0건이며, 명시적 허락을 등록하기 전까지 자동 게시의 독립 근거로 승격하지 않습니다.
+- 실제 뉴스 수집: 국내 공식·연구 RSS 6개, 뉴시스 discovery RSS 1개와 네이버 뉴스 검색 메타데이터를 사용하도록 코드를 확장했고, 023의 새 6개 출처 24시간 예약 정책을 운영 DB에 적용해 조회 확인했습니다. 네이버 호스팅 본문 파서와 private 보존 RPC는 구현했지만 출처별 원문 이용 허용 등록부는 현재 비어 있습니다. 따라서 운영에서는 네이버 본문 네트워크 요청·저장·Gemini 전송이 모두 0건이며, 명시적 허락을 등록하기 전까지 자동 게시의 독립 근거로 승격하지 않습니다.
 - 후보 점수와 생성 품질 게이트: 한국어·영어 신호와 제한된 교차언어 개념 묶음, Gemini 구조화 생성·외부 의미 평가, 결정론적 의미 검사, 최대 1회 수정·보류까지 구현했습니다. 선정된 모든 근거의 원문 1:1 coverage, SHA-256, 보존기한, 출처 메타데이터, 학생·보호자 식별 패턴, 문서별·전체 입력 상한을 모델 호출 전에 검사합니다.
 - 일일 자동 실행: KST 날짜별 lease·fence·revision CAS와 `collect → score → generate → validate → publish` Supabase stage factory, 서버 전용 운영 조립, 인증 우선 Cron endpoint와 KST 00:00 스케줄을 Production에 활성화했습니다. 003 domain 원자 저장, 007 route별 모델 장부, 002 immutable artifact, 008 발행 영수증 복구가 exact 계보로 연결됩니다. Vercel의 `AUTOMATION_MODE=live`, Supabase 서버 전용 키, Gemini opt-in과 `CRON_SECRET`은 Production 환경에만 있으며 Git에 저장하지 않습니다.
-- 통합 검증: ESLint 경고 0, TypeScript 통과, 81개 파일 504개 테스트와 프로덕션 빌드를 확인했습니다. 원문 없는 생성 0-call, 원문 변조·만료·계보 불일치 차단, 허용 정책 없는 Naver 본문 fetch 0회, robots·HTML 파싱, Supabase private 원문 계약과 5단계 fake-only 통합을 검증했습니다. migration 022는 아직 실제 PostgreSQL에 적용하지 않았고 원격 Naver 본문·Gemini·공개 발행도 이번 변경에서 실행하지 않았습니다.
+- 통합 검증: ESLint 경고 0, TypeScript 통과, 82개 파일 510개 테스트와 프로덕션 빌드를 확인했습니다. 원문 없는 생성 0-call, 원문 변조·만료·계보 불일치 차단, 허용 정책 없는 Naver 본문 fetch 0회, discovery RSS description 폐기, 네이버 매체 독립성 강등, Supabase private 원문 계약과 5단계 fake-only 통합을 검증했습니다. migration 022는 아직 실제 PostgreSQL에 적용하지 않았고 원격 Naver 본문·Gemini·공개 발행도 이번 변경에서 실행하지 않았습니다.
 - Cron 운영 검증: Vercel Cron Jobs가 Enabled이고 `/api/cron/daily`가 `0 15 * * *`(UTC, KST 00:00)에 등록됐습니다. 인증 없는 실제 Production 요청은 HTTP 401과 `{ "ok": false, "code": "UNAUTHORIZED" }`로 차단됐습니다. 오늘은 이미 테스트 게시물 한 건이 KST 날짜 고유 슬롯을 사용했으므로 추가 게시물을 강제로 만들지 않았습니다.
 - 실제 RSS 검증: 50건 수집·정규화·삽입 성공, 점수 기준 통과 0건, 근거 후보 0건, 게시 시도 없음
 - 브라우저 검증: 홈 12건, 상세 네 영역·출처 2개, 잘못된 커서 복구, 404, 390/768/1280px 1/2/3열, 가로 넘침·콘솔 경고·오류 없음
-- 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. 현재 활성 국내 출처가 공식 RSS 한 곳뿐이어서 독립 근거가 없으면 무발행하는 것이 정상입니다. canonical survivor, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
+- 알려진 제한: 완료된 model intent에는 audit만 있고 생성 본문·의미 평가 응답의 내구적 복구 저장소는 없어, finalize 후 generate artifact 저장 전 중단은 중복 호출 대신 해당 날 실행을 안전 보류합니다. 일시 장애로 terminal 실패가 된 같은 날짜 실행은 자동 재전송으로 다시 열지 않으므로 운영 알림과 승인된 복구 절차가 필요합니다. 공식 RSS가 늘어도 같은 사건의 독립 근거가 없거나 모델 입력이 허용된 원문이 없으면 무발행하는 것이 정상입니다. canonical survivor, 기사 단위 upstream provenance, DNS 재바인딩 방어, 알림, 접근성 자동 검사는 계속 남아 있습니다.
 - 007은 호출·입력·출력·비용을 모델 호출 전에 영속 예약하고 실제 audit를 exact 합계로 결속합니다. 다만 공급자 성공 후 audit finalize와 generation artifact 저장 사이에 중단되면 모델을 중복 호출하지 않는 대신 생성 본문을 자동 복원하지 못해 해당 실행을 안전 보류합니다.
 - 결정론적 의미 검사는 보수적인 한국어 패턴과 아라비아 숫자만 다룹니다. 동의어·우회 표현, 한글 수량과 깊은 모순·주제 중복은 감사 가능한 외부 의미 평가기로 보완해야 하며, 해당 평가기가 없으면 `runPostGeneration`은 결과를 공개하지 않고 보류합니다.
 

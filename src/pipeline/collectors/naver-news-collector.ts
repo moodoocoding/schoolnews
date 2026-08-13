@@ -9,12 +9,18 @@ import {
 
 export const NAVER_NEWS_PROXY_ORIGIN = "https://k-skill-proxy.nomadamas.org";
 export const NAVER_NEWS_PROXY_PATH = "/v1/naver-news/search";
-export const NAVER_NEWS_QUERY_VERSION = "naver-news-query-v2";
+export const NAVER_NEWS_QUERY_VERSION = "naver-news-query-v3";
 export const NAVER_NEWS_QUERIES = Object.freeze([
   "초등 AI 디지털 교육",
   "교사 생성형 AI 교육",
+  "교육부 AI 디지털 교육",
+  "에듀테크 초등학교 교사",
   "AI 에이전트 개인정보 저작권",
+  "아동 개인정보 AI 학교",
   "딥페이크 아동 청소년",
+  "디지털 웰빙 아동 청소년",
+  "AI 저작권 교육 저작권",
+  "AI 접근성 교육 미디어 리터러시",
   "새로운 디지털 기술 교육 영향",
 ]);
 export const NAVER_NEWS_MAX_ITEMS_PER_QUERY = 30;
@@ -141,8 +147,12 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
         feedUrl: `${NAVER_NEWS_PROXY_ORIGIN}${NAVER_NEWS_PROXY_PATH}`,
         siteUrl: `https://${host}/`,
         publisherType: publisher.id === "ebs-news" ? "official" : "news",
-        originType: publisher.role === "supporting" ? "wire" : "original_reporting",
-        sourceRole: publisher.role,
+        // A publisher hostname does not prove that an individual article is
+        // original reporting. Naver metadata remains discovery-only and is
+        // never counted as an independent evidence source without a later,
+        // article-level provenance review.
+        originType: publisher.role === "supporting" ? "wire" : "unknown",
+        sourceRole: "supporting",
         sourceType: "news",
         authority: "none",
         contentUse: "discovery_only",

@@ -69,6 +69,12 @@ describe("Naver news metadata collector", () => {
     expect(sources.every((source) => source.contentUse === "discovery_only")).toBe(
       true,
     );
+    expect(sources.every((source) => source.sourceRole === "supporting")).toBe(
+      true,
+    );
+    expect(
+      sources.every((source) => ["wire", "unknown"].includes(source.originType)),
+    ).toBe(true);
   });
 
   it("never turns discovery-only API metadata into model evidence", () => {

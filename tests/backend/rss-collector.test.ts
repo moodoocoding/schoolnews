@@ -6,6 +6,7 @@ import {
   isUnsafeNetworkAddress,
   RSS_COLLECTOR_USER_AGENT,
   RSS_SOURCE_REGISTRY,
+  RSS_SOURCE_REVIEW_RECORDS,
 } from "../../src/pipeline/collectors";
 
 const source = RSS_SOURCE_REGISTRY[0];
@@ -54,8 +55,8 @@ afterEach(() => {
 });
 
 describe("RSS 수집원 등록부", () => {
-  it("검토된 국내 과기정통부 피드만 하루 주기로 활성화한다", () => {
-    expect(RSS_SOURCE_REGISTRY).toHaveLength(1);
+  it("검토된 국내 공식·언론 피드 일곱 개만 하루 주기로 활성화한다", () => {
+    expect(RSS_SOURCE_REGISTRY).toHaveLength(7);
     expect(source).toMatchObject({
       sourceId: "msit-press-release",
       publisherGroupId: "msit",
@@ -69,7 +70,43 @@ describe("RSS 수집원 등록부", () => {
     expect(source.requestPolicy.minIntervalMs).toBe(86_400_000);
     expect(source.requestPolicy.timeoutMs).toBe(15_000);
     expect(RSS_SOURCE_REGISTRY.every((entry) => entry.locale === "ko-KR")).toBe(true);
+    expect(RSS_SOURCE_REGISTRY.map((entry) => entry.sourceId)).toEqual([
+      "msit-press-release",
+      "kedi-press-release",
+      "kisa-press-release",
+      "mohw-press-release",
+      "krcert-report-guide",
+      "kocca-research",
+      "newsis-tech-rss",
+    ]);
+    expect(
+      RSS_SOURCE_REGISTRY.find((entry) => entry.sourceId === "kisa-press-release")
+        ?.contentUse,
+    ).toBe("discovery_only");
+    expect(
+      RSS_SOURCE_REGISTRY.every(
+        (entry) =>
+          entry.enabled &&
+          entry.accessStatus === "allowed" &&
+          entry.feedUrl.startsWith("https://") &&
+          entry.policyReferenceUrls.every((url) => url.startsWith("https://")),
+      ),
+    ).toBe(true);
     expect(RSS_COLLECTOR_USER_AGENT).toContain("AI-Education-Today");
+  });
+
+  it("RSS/API 또는 접근 허용을 확인하지 못한 후보는 활성 등록부에서 제외한다", () => {
+    expect(RSS_SOURCE_REVIEW_RECORDS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ organization: "교육부", status: "not_enabled" }),
+        expect.objectContaining({ organization: "한국교육학술정보원", status: "not_enabled" }),
+        expect.objectContaining({ organization: "개인정보보호위원회", status: "not_enabled" }),
+        expect.objectContaining({ organization: "한국지능정보사회진흥원", status: "not_enabled" }),
+        expect.objectContaining({ organization: "IT동아", status: "not_enabled" }),
+      ]),
+    );
+    expect(RSS_SOURCE_REVIEW_RECORDS.find((record) => record.organization === "IT동아")?.reason)
+      .toContain("robots.txt");
   });
 });
 
@@ -128,6 +165,69 @@ describe("안전한 RSS 수집", () => {
       author: "홍길동",
       excerpt: "짧은 소식",
     });
+  });
+
+  it("discovery_only RSS는 description을 기사 excerpt로 저장하지 않는다", async () => {
+    const discoverySource: SourceRegistryEntry = {
+      ...source,
+      sourceId: "discovery-rss",
+      publisherGroupId: "discovery",
+      provenanceGroupPrefix: "discovery",
+      contentUse: "discovery_only",
+    };
+    const fetchMock = vi.fn(async () => response(validRss)) as unknown as typeof fetch;
+
+    const outcome = await collectRssSource(discoverySource, {
+      fetch: fetchMock,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.items[0].excerpt).toBeNull();
+    expect(JSON.stringify(outcome)).not.toContain("짧은 요약");
+    expect(JSON.stringify(outcome)).not.toContain("원문 전체");
+  });
+
+  it("공식 피드가 같은 site host의 http 기사 링크를 주면 https로만 승격한다", async () => {
+    const kedi = RSS_SOURCE_REGISTRY.find((entry) => entry.sourceId === "kedi-press-release");
+    expect(kedi).toBeDefined();
+    const xml = `<?xml version="1.0"?><rss version="2.0"><channel><item>
+      <title>초등 디지털 교육 연구</title>
+      <link>http://www.kedi.re.kr/khome/article.do?id=1</link>
+      <pubDate>2026-08-12</pubDate>
+      <description>공식 연구 설명</description>
+    </item></channel></rss>`;
+    const fetchMock = vi.fn(async () => response(xml)) as unknown as typeof fetch;
+
+    const outcome = await collectRssSource(kedi!, {
+      fetch: fetchMock,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.status).toBe("succeeded");
+    expect(outcome.items[0]).toMatchObject({
+      originalUrl: "https://www.kedi.re.kr/khome/article.do?id=1",
+      publishedAt: "2026-08-12T00:00:00+09:00",
+      publishedAtPrecision: "date",
+    });
+  });
+
+  it("다른 host의 http 링크는 https로 승격하지 않고 항목을 제외한다", async () => {
+    const xml = `<?xml version="1.0"?><rss version="2.0"><channel><item>
+      <title>외부 링크</title><link>http://external.example/article/1</link>
+      <pubDate>2026-08-12</pubDate><description>설명</description>
+    </item></channel></rss>`;
+    const outcome = await collectRssSource(source, {
+      fetch: vi.fn(async () => response(xml)) as unknown as typeof fetch,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.items).toHaveLength(0);
+    expect(outcome.issues).toEqual([
+      expect.objectContaining({ code: "ITEM_SKIPPED", itemIndex: 0 }),
+    ]);
   });
 
   it("DTD와 엔티티를 포함한 XML을 전체 실패로 차단한다", async () => {

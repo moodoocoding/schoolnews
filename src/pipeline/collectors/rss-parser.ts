@@ -105,19 +105,41 @@ function truncate(value: string, maximum: number): string {
   return Array.from(value).slice(0, maximum).join("").trim();
 }
 
-function preferredExcerpt(rawExcerpt: string, source: SourceRegistryEntry): string {
-  void source;
+function preferredExcerpt(
+  rawExcerpt: string,
+  source: SourceRegistryEntry,
+): string | null {
+  if (source.contentUse === "discovery_only") {
+    return null;
+  }
   return stripMarkupToPlainText(rawExcerpt);
 }
 
-function resolveArticleLink(item: XmlRecord, baseUrl: string): string | null {
+function secureKnownPublisherLink(
+  value: string,
+  source: SourceRegistryEntry,
+  baseUrl: string,
+): string | null {
+  try {
+    const url = new URL(value, baseUrl);
+    const publisherHost = new URL(source.siteUrl).hostname.toLowerCase();
+    if (url.protocol === "http:" && url.hostname.toLowerCase() === publisherHost) {
+      url.protocol = "https:";
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function resolveArticleLink(
+  item: XmlRecord,
+  source: SourceRegistryEntry,
+  baseUrl: string,
+): string | null {
   const rssLink = textValue(item.link);
   if (rssLink !== null) {
-    try {
-      return new URL(rssLink, baseUrl).toString();
-    } catch {
-      return null;
-    }
+    return secureKnownPublisherLink(rssLink, source, baseUrl);
   }
 
   for (const candidate of asArray(item.link)) {
@@ -127,11 +149,7 @@ function resolveArticleLink(item: XmlRecord, baseUrl: string): string | null {
     const relation = textValue(candidate["@_rel"]);
     const href = textValue(candidate["@_href"]);
     if (href !== null && (relation === null || relation === "alternate")) {
-      try {
-        return new URL(href, baseUrl).toString();
-      } catch {
-        return null;
-      }
+      return secureKnownPublisherLink(href, source, baseUrl);
     }
   }
   return null;
@@ -147,9 +165,9 @@ function parsePublicationTimestamp(item: XmlRecord): PublicationMoment | null {
   if (raw === null) {
     return null;
   }
-  const msitCalendarDate = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(raw);
-  if (msitCalendarDate) {
-    const [, year, month, day] = msitCalendarDate;
+  const calendarDateMatch = /^(\d{4})[-.](\d{2})[-.](\d{2})$/.exec(raw);
+  if (calendarDateMatch) {
+    const [, year, month, day] = calendarDateMatch;
     const calendarDate = new Date(
       Date.UTC(Number(year), Number(month) - 1, Number(day)),
     );
@@ -196,13 +214,14 @@ function parseItem(
   const title = rawTitle === null
     ? ""
     : truncate(stripMarkupToPlainText(rawTitle), 500);
-  const originalUrl = resolveArticleLink(rawItem, baseUrl) ?? "";
+  const originalUrl = resolveArticleLink(rawItem, source, baseUrl) ?? "";
   const publication = parsePublicationTimestamp(rawItem);
   const externalId = firstText(rawItem, ["guid", "id"]);
   const rawExcerpt = firstText(rawItem, ["description", "summary"]);
-  const excerpt = rawExcerpt === null
+  const preferred = rawExcerpt === null
     ? null
-    : truncate(preferredExcerpt(rawExcerpt, source), 800) || null;
+    : preferredExcerpt(rawExcerpt, source);
+  const excerpt = preferred === null ? null : truncate(preferred, 800) || null;
 
   if (!fetchableSourceUrlSchema.safeParse(originalUrl).success) {
     throw new Error("유효한 HTTPS 원문 링크가 없습니다.");
