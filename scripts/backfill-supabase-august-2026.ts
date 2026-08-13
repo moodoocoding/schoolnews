@@ -26,6 +26,7 @@ import {
 } from "./backfill-2026-08-content";
 
 const APPROVED_PROJECT = "https://vrjuvozmnaufzvrzzbnd.supabase.co";
+const BACKFILL_RPC_PATH = "/rpc/publish_backfill_post";
 
 if (
   process.env.ALLOW_AUGUST_2026_BACKFILL !== "true" ||
@@ -44,6 +45,65 @@ const environment = parseEnvironment({
 if (environment.SUPABASE_URL !== APPROVED_PROJECT) {
   throw new Error("AUGUST_2026_BACKFILL_PROJECT_MISMATCH");
 }
+const supabaseSecretKey: string =
+  environment.SUPABASE_SECRET_KEY ??
+  (() => {
+    throw new Error("AUGUST_2026_BACKFILL_SECRET_REQUIRED");
+  })();
+
+async function assertBackfillBoundaryReady(): Promise<void> {
+  const response = await fetch(environment.SUPABASE_URL + "/rest/v1/", {
+    headers: {
+      accept: "application/openapi+json",
+      apikey: supabaseSecretKey,
+      authorization: "Bearer " + supabaseSecretKey,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_UNAVAILABLE");
+  }
+  const specification = (await response.json()) as { paths?: unknown };
+  if (
+    specification.paths === null ||
+    typeof specification.paths !== "object" ||
+    !(BACKFILL_RPC_PATH in specification.paths)
+  ) {
+    throw new Error("AUGUST_2026_BACKFILL_RPC_NOT_APPLIED");
+  }
+
+  const dates = AUGUST_2026_BACKFILL_TOPICS.map((topic) => topic.runDate);
+  const existingUrl = new URL(
+    environment.SUPABASE_URL + "/rest/v1/published_posts",
+  );
+  existingUrl.searchParams.set("select", "publication_date_kst");
+  existingUrl.searchParams.set(
+    "publication_date_kst",
+    "in.(" + dates.join(",") + ")",
+  );
+  const existingResponse = await fetch(existingUrl, {
+    headers: {
+      accept: "application/json",
+      apikey: supabaseSecretKey,
+      authorization: "Bearer " + supabaseSecretKey,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!existingResponse.ok) {
+    throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_UNAVAILABLE");
+  }
+  const existing = (await existingResponse.json()) as unknown;
+  if (!Array.isArray(existing)) {
+    throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_INVALID_RESPONSE");
+  }
+  if (existing.length > 0) {
+    throw new Error("AUGUST_2026_BACKFILL_DATES_ALREADY_OCCUPIED");
+  }
+}
+
+await assertBackfillBoundaryReady();
 
 const baseSource = RSS_SOURCE_REGISTRY[0];
 
