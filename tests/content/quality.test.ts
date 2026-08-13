@@ -48,6 +48,29 @@ describe("생성 게시물 1차 품질 게이트", () => {
     expect(result.blockingReasons).toContain("CONTENT_TOO_LONG");
   });
 
+  it("기사로 읽기에 너무 짧은 본문을 CONTENT_TOO_SHORT로 차단한다", () => {
+    const post = validGeneratedPost();
+    post.body.forEach((paragraph, index) => {
+      paragraph.sentences = [
+        {
+          sentenceId: `short-sentence-${index + 1}`,
+          text: "핵심 내용을 확인합니다.",
+          claimIds: [`claim-${index + 1}`],
+        },
+      ];
+    });
+
+    const result = validateGeneratedPost({
+      post,
+      evidenceItems: validEvidenceItems(),
+      evidencePolicy: "primary_plus_independent",
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.blockingReasons).toContain("CONTENT_TOO_SHORT");
+    expect(result.blockingReasons).not.toContain("CONTENT_TOO_LONG");
+  });
+
   it("존재하지 않는 evidence ID를 MISSING_EVIDENCE로 차단한다", () => {
     const post = validGeneratedPost();
     post.claims[1].evidenceRefs = [

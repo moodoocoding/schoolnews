@@ -104,7 +104,7 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
         sentences: [
           {
             sentenceId: "sentence-primary",
-            text: primary.passage,
+            text: `${primary.passage} 수업 목적과 학생에게 필요한 도움을 먼저 살펴보는 과정도 필요합니다.`,
             claimIds: ["claim-primary"],
           },
         ],
@@ -113,7 +113,7 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
         sentences: [
           {
             sentenceId: "sentence-independent",
-            text: independent.passage,
+            text: `${independent.passage} 이 내용을 확인하면 교사와 학생이 AI 사용 전에 안전 원칙을 함께 정할 수 있습니다.`,
             claimIds: ["claim-independent"],
           },
         ],
@@ -122,7 +122,7 @@ function postFor(items: readonly EvidenceItem[]): GeneratedPost {
         sentences: [
           {
             sentenceId: "sentence-context",
-            text: "두 자료는 개인정보와 안전 확인 내용을 함께 설명합니다.",
+            text: "두 자료는 개인정보와 안전 확인 내용을 함께 설명합니다. 수업에서는 입력하지 말아야 할 정보와 이상한 결과를 발견했을 때 알릴 방법을 구체적으로 정해 볼 수 있습니다.",
             claimIds: ["claim-context"],
           },
         ],
@@ -511,7 +511,7 @@ function setup(sources: readonly SourceRegistryEntry[]) {
             providerId: "supabase-fake",
             modelId: "supabase-fake-v1",
           },
-          promptVersion: "generated-post-v2",
+          promptVersion: "generated-post-v3",
           reservationPolicyVersion: "fake-reservation-v1",
           reservation: (request: { maxOutputTokens: number }) => ({
             inputTokens: 500,

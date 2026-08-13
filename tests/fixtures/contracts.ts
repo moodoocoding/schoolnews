@@ -87,7 +87,7 @@ export const generatedPostFixture: GeneratedPost = {
       sentences: [
         {
           sentenceId: "sentence-1",
-          text: "새 안내 자료는 학생의 발달 단계에 맞춰 AI를 사용해야 한다고 설명합니다.",
+          text: "새 안내 자료는 학생의 발달 단계에 맞춰 AI를 사용해야 한다고 설명합니다. 수업 목적과 학생에게 필요한 도움을 먼저 살펴보는 과정도 필요합니다.",
           claimIds: ["claim-1"],
         },
       ],
@@ -96,7 +96,7 @@ export const generatedPostFixture: GeneratedPost = {
       sentences: [
         {
           sentenceId: "sentence-2",
-          text: "AI가 만든 답은 교사와 학생이 출처와 오류를 다시 확인하는 과정이 필요합니다.",
+          text: "AI가 만든 답은 교사와 학생이 출처와 오류를 다시 확인하는 과정이 필요합니다. 왜 그 답을 선택했는지 서로 설명하고 비교하는 활동으로 이어질 수 있습니다.",
           claimIds: ["claim-2"],
         },
       ],
@@ -105,7 +105,7 @@ export const generatedPostFixture: GeneratedPost = {
       sentences: [
         {
           sentenceId: "sentence-3",
-          text: "수업에서는 정답을 빠르게 얻는 것보다 어떤 질문을 하고 어떻게 검토했는지 돌아볼 수 있습니다.",
+          text: "수업에서는 정답을 빠르게 얻는 것보다 어떤 질문을 하고 어떻게 검토했는지 돌아볼 수 있습니다. 다음 질문을 스스로 고치는 과정까지 기록하면 학습의 흐름을 더 잘 이해할 수 있습니다.",
           claimIds: ["claim-3"],
         },
       ],

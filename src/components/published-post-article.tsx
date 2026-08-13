@@ -20,6 +20,11 @@ function SourceMetadata({ source }: { source: PublishedSource }) {
 }
 
 export function PublishedPostArticle({ post }: { post: PublishedPostDetail }) {
+  const publisherNames = Array.from(
+    new Set(post.sources.map((source) => source.publisher)),
+  );
+  const readingNote = `${publisherNames.join(" · ")} 자료를 함께 살펴보고, 서로 겹치는 내용과 다른 관점을 확인된 범위 안에서 정리했습니다.`;
+
   return (
     <article className={styles.article}>
       <header className={styles.articleHeader}>
@@ -43,6 +48,13 @@ export function PublishedPostArticle({ post }: { post: PublishedPostDetail }) {
       <section aria-labelledby="what-happened" className={styles.section}>
         <h2 id="what-happened">무슨 일이 있었나요?</h2>
         <div className={styles.prose}>
+          <p className={styles.articleIntro}>
+            {readingNote}
+            <CitationLinks
+              sourceIds={post.sources.map((source) => source.id)}
+              sources={post.sources}
+            />
+          </p>
           {post.body.map((paragraph, paragraphIndex) => (
             <p key={`${post.id}-paragraph-${paragraphIndex + 1}`}>
               {paragraph.claims.map((claim, claimIndex) => (

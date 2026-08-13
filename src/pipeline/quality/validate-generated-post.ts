@@ -11,12 +11,13 @@ import {
   type TopicCandidate,
 } from "../../contracts";
 
-export const GENERATED_POST_QUALITY_VERSION = "generated-post-quality-v1";
+export const GENERATED_POST_QUALITY_VERSION = "generated-post-quality-v2";
 
 const CONTENT_LIMITS = {
   title: 36,
   oneLineSummary: 100,
   body: 900,
+  minimumBody: 170,
   question: 80,
   minimumParagraphs: 3,
   maximumParagraphs: 5,
@@ -211,6 +212,11 @@ function checkContentLengths(post: GeneratedPost): QualityCheck {
   if (bodyLength > CONTENT_LIMITS.body) {
     reasons.push(`본문은 ${CONTENT_LIMITS.body}자를 넘을 수 없습니다.`);
   }
+  if (bodyLength < CONTENT_LIMITS.minimumBody) {
+    reasons.push(
+      `본문은 최소 ${CONTENT_LIMITS.minimumBody}자 이상의 기사형 내용으로 작성해야 합니다.`,
+    );
+  }
   if (
     post.body.length < CONTENT_LIMITS.minimumParagraphs ||
     post.body.length > CONTENT_LIMITS.maximumParagraphs
@@ -343,7 +349,21 @@ export function validateGeneratedPost(
   const contentLengthCheck = checkContentLengths(parsedPost.data);
   checks.push(contentLengthCheck);
   if (!contentLengthCheck.passed) {
-    blockingReasons.push("CONTENT_TOO_LONG");
+    const bodyLength = parsedPost.data.body.reduce(
+      (total, paragraph) =>
+        total +
+        paragraph.sentences.reduce(
+          (paragraphTotal, sentence) =>
+            paragraphTotal + graphemeLength(sentence.text),
+          0,
+        ),
+      0,
+    );
+    blockingReasons.push(
+      bodyLength < CONTENT_LIMITS.minimumBody
+        ? "CONTENT_TOO_SHORT"
+        : "CONTENT_TOO_LONG",
+    );
   }
 
   const usedEvidence = parsedPost.data.usedEvidenceIds.flatMap((evidenceId) => {
