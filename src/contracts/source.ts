@@ -18,6 +18,11 @@ export const sourceAccessStatusSchema = z.enum([
   "blocked",
 ]);
 
+export const sourceContentUseSchema = z.enum([
+  "evidence",
+  "discovery_only",
+]);
+
 export const sourceRequestPolicySchema = z
   .object({
     timeoutMs: z.number().int().min(1_000).max(30_000),
@@ -42,6 +47,7 @@ export const sourceRegistryEntrySchema = z
     sourceRole: evidenceSourceRoleSchema,
     sourceType: evidenceSourceTypeSchema,
     authority: evidenceAuthoritySchema,
+    contentUse: sourceContentUseSchema,
     locale: z.string().trim().regex(/^[a-z]{2}(?:-[A-Z]{2})?$/),
     enabled: z.boolean(),
     accessStatus: sourceAccessStatusSchema,

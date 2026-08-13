@@ -18,7 +18,7 @@ export const NAVER_NEWS_QUERIES = Object.freeze([
   "새로운 디지털 기술 교육 영향",
 ]);
 export const NAVER_NEWS_MAX_ITEMS_PER_QUERY = 30;
-export const NAVER_NEWS_MAX_EXCERPT_GRAPHEMES = 500;
+export const NAVER_NEWS_MAX_TITLE_GRAPHEMES = 180;
 
 const ALLOWED_PUBLISHERS = Object.freeze({
   "news.donga.com": { id: "donga", name: "동아일보", role: "independent" },
@@ -33,6 +33,8 @@ const ALLOWED_PUBLISHERS = Object.freeze({
   "www.hani.co.kr": { id: "hani", name: "한겨레", role: "independent" },
   "www.khan.co.kr": { id: "khan", name: "경향신문", role: "independent" },
   "www.seoul.co.kr": { id: "seoul-news", name: "서울신문", role: "independent" },
+  "www.chosun.com": { id: "chosun", name: "조선일보", role: "independent" },
+  "chosun.com": { id: "chosun", name: "조선일보", role: "independent" },
   "www.newsis.com": { id: "newsis", name: "뉴시스", role: "supporting" },
 } as const);
 
@@ -93,7 +95,7 @@ function clean(value: string): string {
       .normalize("NFKC")
       .replace(/\s+/g, " ")
       .trim(),
-    NAVER_NEWS_MAX_EXCERPT_GRAPHEMES,
+    NAVER_NEWS_MAX_TITLE_GRAPHEMES,
   );
 }
 
@@ -125,6 +127,7 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
         sourceRole: publisher.role,
         sourceType: "news",
         authority: "none",
+        contentUse: "discovery_only",
         locale: "ko-KR",
         enabled: true,
         accessStatus: "allowed",
@@ -140,7 +143,7 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
           maxRedirects: 0,
         },
         notes:
-          "네이버 검색 Open API 프록시의 제목·요약·원문 링크·발행시각만 사용합니다. 기사 본문은 수집하지 않으며 원문 도메인이 확인된 결과만 저장합니다.",
+          "네이버 검색 Open API 프록시에서 제목·원문 링크·발행시각만 발견 정보로 저장합니다. 검색 요약과 기사 본문은 저장하거나 생성형 AI 입력·발행 근거로 사용하지 않습니다.",
       }),
     );
 }
@@ -203,7 +206,7 @@ export async function collectNaverNewsSources(input: {
         externalId: `naver:${sha256(item.original_link ?? item.link).slice(0, 32)}`,
         originalUrl: item.original_link ?? item.link,
         title: clean(item.title),
-        excerpt: clean(item.description),
+        excerpt: null,
         author: null,
         publisher: source.name,
         publishedAt: new Date(item.pub_date_iso).toISOString(),

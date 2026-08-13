@@ -71,6 +71,7 @@ describe("공유 계약", () => {
       sourceRole: "independent",
       sourceType: "news",
       authority: "none",
+      contentUse: "discovery_only",
       locale: "ko-KR",
       enabled: true,
       accessStatus: "needs_review",

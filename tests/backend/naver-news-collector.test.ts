@@ -53,6 +53,7 @@ describe("Naver news metadata collector", () => {
     expect(donga?.items).toHaveLength(1);
     expect(donga?.items[0]?.title).toBe("초등 AI 교육을 다시 묻다");
     expect(donga?.items[0]?.publisher).toBe("동아일보");
+    expect(donga?.items[0]?.excerpt).toBeNull();
     expect(
       [...outcomes.values()].flatMap((outcome) => outcome.items),
     ).toHaveLength(1);
@@ -65,9 +66,12 @@ describe("Naver news metadata collector", () => {
     expect(
       sources.every((source) => source.requestPolicy.minIntervalMs === 86_400_000),
     ).toBe(true);
+    expect(sources.every((source) => source.contentUse === "discovery_only")).toBe(
+      true,
+    );
   });
 
-  it("labels API metadata as a search summary rather than an RSS passage", () => {
+  it("never turns discovery-only API metadata into model evidence", () => {
     const source = createNaverPublisherSources().find(
       (candidate) => candidate.sourceId === "naver-news-donga",
     );
@@ -89,9 +93,7 @@ describe("Naver news metadata collector", () => {
       source!,
     );
 
-    expect(createRssExcerptEvidenceItem(article, source!)?.locator).toBe(
-      "뉴스 검색 API 요약",
-    );
+    expect(createRssExcerptEvidenceItem(article, source!)).toBeNull();
   });
 
   it("fails without retry when the proxy rejects a request", async () => {

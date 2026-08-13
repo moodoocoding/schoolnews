@@ -92,6 +92,10 @@ export function sanitizeRssExcerpt(excerpt: string): string {
 function createEvidenceFromValidatedPair(
   pair: Readonly<ValidatedArticleSource>,
 ): EvidenceItem | null {
+  if (pair.source.contentUse === "discovery_only") {
+    return null;
+  }
+
   const excerpt = pair.article.excerpt;
   if (!excerpt) {
     return null;

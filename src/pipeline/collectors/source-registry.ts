@@ -24,6 +24,7 @@ export const RSS_SOURCE_REGISTRY: readonly SourceRegistryEntry[] = Object.freeze
     sourceRole: "primary",
     sourceType: "primary",
     authority: "public_authority_direct_fact",
+    contentUse: "evidence",
     locale: "ko-KR",
     enabled: true,
     accessStatus: "allowed",
