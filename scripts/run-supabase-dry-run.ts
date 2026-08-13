@@ -62,7 +62,7 @@ const result = await runSupabaseDailyPipeline({
   sourceAttempt,
   sources: RSS_SOURCE_REGISTRY,
   collectSource: (source, signal) => collectRssSource(source, { signal }),
-  collectionConfigurationId: "licensed-production-sources-v1",
+  collectionConfigurationId: "licensed-production-sources-v2",
   previousPostTitles: history.titles,
   previousContentFingerprints: history.contentFingerprints,
   limits: {

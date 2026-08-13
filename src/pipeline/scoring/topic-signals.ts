@@ -5,14 +5,14 @@ import type {
 import { validateArticleSources } from "../retrieval";
 import type { TopicSignals } from "./topic-score";
 
-export const TOPIC_SIGNAL_VERSION = "topic-signals-v1";
+export const TOPIC_SIGNAL_VERSION = "topic-signals-v2";
 
 interface WeightedKeyword {
   phrase: string;
   weight: number;
 }
 
-/** Explicit Korean-first taxonomy. Changes require a version bump and fixtures. */
+/** Explicit Korean/English taxonomy. Changes require a version bump and fixtures. */
 export const TOPIC_KEYWORD_TAXONOMY = {
   elementary: [
     { phrase: "초등학교", weight: 1 },
@@ -28,6 +28,16 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "학생", weight: 0.25 },
     { phrase: "학교", weight: 0.2 },
     { phrase: "어린이", weight: 0.35 },
+    { phrase: "primary school", weight: 1 },
+    { phrase: "elementary school", weight: 1 },
+    { phrase: "primary education", weight: 0.95 },
+    { phrase: "schoolchildren", weight: 0.9 },
+    { phrase: "pupils", weight: 0.5 },
+    { phrase: "parents", weight: 0.35 },
+    { phrase: "teachers", weight: 0.3 },
+    { phrase: "students", weight: 0.25 },
+    { phrase: "school", weight: 0.2 },
+    { phrase: "children", weight: 0.35 },
   ] satisfies readonly WeightedKeyword[],
   aiDigital: [
     { phrase: "AI 디지털교과서", weight: 1 },
@@ -52,6 +62,19 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "AI", weight: 0.55 },
     { phrase: "LLM", weight: 0.45 },
     { phrase: "디지털 전환", weight: 0.45 },
+    { phrase: "artificial intelligence education", weight: 0.9 },
+    { phrase: "ai in education", weight: 0.9 },
+    { phrase: "digital education", weight: 0.8 },
+    { phrase: "digital learning", weight: 0.75 },
+    { phrase: "digital literacy", weight: 0.7 },
+    { phrase: "media literacy", weight: 0.65 },
+    { phrase: "edtech", weight: 0.7 },
+    { phrase: "coding education", weight: 0.6 },
+    { phrase: "generative ai", weight: 0.65 },
+    { phrase: "artificial intelligence", weight: 0.55 },
+    { phrase: "ai", weight: 0.55 },
+    { phrase: "llm", weight: 0.45 },
+    { phrase: "digital transformation", weight: 0.45 },
   ] satisfies readonly WeightedKeyword[],
   educationContext: [
     { phrase: "교육", weight: 0.7 },
@@ -65,12 +88,26 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "교과서", weight: 0.65 },
     { phrase: "교육부", weight: 0.75 },
     { phrase: "교육청", weight: 0.7 },
+    { phrase: "education", weight: 0.7 },
+    { phrase: "teaching", weight: 0.7 },
+    { phrase: "learning", weight: 0.65 },
+    { phrase: "classroom", weight: 0.65 },
+    { phrase: "teacher", weight: 0.6 },
+    { phrase: "student", weight: 0.55 },
+    { phrase: "pupil", weight: 0.55 },
+    { phrase: "school", weight: 0.55 },
+    { phrase: "parent", weight: 0.5 },
+    { phrase: "textbook", weight: 0.65 },
   ] satisfies readonly WeightedKeyword[],
   nonElementaryContext: [
     { phrase: "중학교", weight: 1 },
     { phrase: "고등학교", weight: 1 },
     { phrase: "대학생", weight: 1 },
     { phrase: "대학", weight: 1 },
+    { phrase: "secondary school", weight: 1 },
+    { phrase: "higher education", weight: 1 },
+    { phrase: "university", weight: 1 },
+    { phrase: "college", weight: 1 },
   ] satisfies readonly WeightedKeyword[],
   socialMeaning: [
     { phrase: "정책", weight: 0.65 },
@@ -90,6 +127,24 @@ export const TOPIC_KEYWORD_TAXONOMY = {
     { phrase: "영향", weight: 0.55 },
     { phrase: "확대", weight: 0.5 },
     { phrase: "금지", weight: 0.6 },
+    { phrase: "policy", weight: 0.65 },
+    { phrase: "guideline", weight: 0.7 },
+    { phrase: "implementation", weight: 0.65 },
+    { phrase: "rollout", weight: 0.55 },
+    { phrase: "nationwide", weight: 0.6 },
+    { phrase: "budget", weight: 0.55 },
+    { phrase: "legislation", weight: 0.75 },
+    { phrase: "privacy", weight: 0.8 },
+    { phrase: "data protection", weight: 0.8 },
+    { phrase: "copyright", weight: 0.75 },
+    { phrase: "safety", weight: 0.65 },
+    { phrase: "ethics", weight: 0.65 },
+    { phrase: "digital divide", weight: 0.8 },
+    { phrase: "accessibility", weight: 0.7 },
+    { phrase: "fairness", weight: 0.7 },
+    { phrase: "impact", weight: 0.55 },
+    { phrase: "expansion", weight: 0.5 },
+    { phrase: "ban", weight: 0.6 },
   ] satisfies readonly WeightedKeyword[],
 } as const;
 
@@ -165,7 +220,12 @@ function deriveKeywordSignals(
       text,
       TOPIC_KEYWORD_TAXONOMY.nonElementaryContext,
     );
-    if (nonElementary > 0 && !includesPhrase(text, "초등")) {
+    const explicitlyElementary =
+      includesPhrase(text, "초등") ||
+      includesPhrase(text, "primary school") ||
+      includesPhrase(text, "elementary school") ||
+      includesPhrase(text, "primary education");
+    if (nonElementary > 0 && !explicitlyElementary) {
       elementary = Math.min(elementary, 0.15);
     }
 

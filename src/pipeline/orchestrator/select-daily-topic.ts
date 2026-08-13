@@ -13,8 +13,21 @@ import {
   scoreTopicSignals,
 } from "../scoring";
 
-export const DAILY_TOPIC_SELECTION_VERSION = "daily-topic-selection-v1";
+export const DAILY_TOPIC_SELECTION_VERSION = "daily-topic-selection-v2";
 export const RELATED_TITLE_SIMILARITY_THRESHOLD = 0.42;
+
+const BILINGUAL_TITLE_CONCEPTS = [
+  ["초등학교", "초등교육", "초등학생", "primary school", "elementary school", "primary education", "schoolchildren"],
+  ["인공지능", "ai", "artificial intelligence"],
+  ["디지털 교육", "디지털 학습", "digital education", "digital learning"],
+  ["개인정보", "privacy", "data protection"],
+  ["지침", "guideline", "guidelines", "guidance"],
+  ["교사", "teacher", "teachers"],
+  ["학생", "student", "students", "pupil", "pupils"],
+  ["학교", "school", "schools"],
+  ["디지털 리터러시", "digital literacy"],
+  ["안전", "safety"],
+] as const;
 
 export type DailyTopicSelectionResult =
   | {
@@ -59,14 +72,56 @@ function titleBigrams(value: string): Set<string> {
   );
 }
 
+function normalizedTitleWords(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ko")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsConceptPhrase(value: string, phrase: string): boolean {
+  const normalizedPhrase = normalizedTitleWords(phrase);
+  return /[a-z0-9]/.test(normalizedPhrase)
+    ? ` ${value} `.includes(` ${normalizedPhrase} `)
+    : value.includes(normalizedPhrase);
+}
+
+function titleConcepts(value: string): Set<string> {
+  const normalized = normalizedTitleWords(value);
+  return new Set(
+    BILINGUAL_TITLE_CONCEPTS.flatMap((phrases, index) =>
+      phrases.some((phrase) => containsConceptPhrase(normalized, phrase))
+        ? [`concept-${index}`]
+        : [],
+    ),
+  );
+}
+
+function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+  const intersection = [...left].filter((item) => right.has(item)).length;
+  return intersection / (left.size + right.size - intersection);
+}
+
 function titleSimilarity(left: string, right: string): number {
   const leftBigrams = titleBigrams(left);
   const rightBigrams = titleBigrams(right);
-  if (leftBigrams.size === 0 || rightBigrams.size === 0) return 0;
+  const conceptSimilarity = jaccardSimilarity(
+    titleConcepts(left),
+    titleConcepts(right),
+  );
+  if (leftBigrams.size === 0 || rightBigrams.size === 0) {
+    return conceptSimilarity;
+  }
   const intersection = [...leftBigrams].filter((item) =>
     rightBigrams.has(item),
   ).length;
-  return (2 * intersection) / (leftBigrams.size + rightBigrams.size);
+  return Math.max(
+    (2 * intersection) / (leftBigrams.size + rightBigrams.size),
+    conceptSimilarity,
+  );
 }
 
 function groupRelatedArticles(
@@ -188,8 +243,8 @@ function buildCandidate(input: {
     evidencePolicy,
     evidencePolicyReason:
       evidencePolicy === "primary_plus_independent"
-        ? "서로 다른 원출처의 공식 자료와 독립 보도가 함께 확인되었습니다."
-        : "소유와 원출처가 다른 독립 보도 두 건 이상이 확인되었습니다.",
+        ? "서로 다른 원출처의 공식 자료와 독립 기관·연구·보도가 함께 확인되었습니다."
+        : "소유와 원출처가 다른 독립 기관·연구·보도 두 건 이상이 확인되었습니다.",
     newFactEvidenceIds: evidenceIds,
     selectionReason:
       "관련 기사 묶음이 주제 점수와 독립 출처 기준을 모두 충족했습니다.",

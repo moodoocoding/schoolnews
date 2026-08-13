@@ -85,7 +85,7 @@ export async function runConfiguredSupabaseAutomation(input: {
       generatedRoutes: rawRoutes.generatedRoutes,
       semanticRoutes: rawRoutes.semanticRoutes,
     },
-    collectionConfigurationId: "licensed-production-sources-v1",
+    collectionConfigurationId: "licensed-production-sources-v2",
     previousPostTitles: history.titles,
     previousContentFingerprints: history.contentFingerprints,
     limits: PRODUCTION_RUN_LIMITS,

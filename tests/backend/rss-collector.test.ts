@@ -9,6 +9,10 @@ import {
 } from "../../src/pipeline/collectors";
 
 const source = RSS_SOURCE_REGISTRY[0];
+const ecSource = RSS_SOURCE_REGISTRY.find(
+  (entry) => entry.sourceId === "ec-digital-strategy",
+);
+if (!ecSource) throw new Error("EC digital strategy source fixture expected");
 const publicLookup = vi.fn(async () => [
   { address: "203.0.114.20", family: 4 as const },
 ]);
@@ -54,8 +58,8 @@ afterEach(() => {
 });
 
 describe("RSS 수집원 등록부", () => {
-  it("공식 과기정통부 보도자료 피드만 하루 주기로 활성화한다", () => {
-    expect(RSS_SOURCE_REGISTRY).toHaveLength(1);
+  it("검토된 과기정통부와 EU 디지털전략 피드만 하루 주기로 활성화한다", () => {
+    expect(RSS_SOURCE_REGISTRY).toHaveLength(2);
     expect(source).toMatchObject({
       sourceId: "msit-press-release",
       publisherGroupId: "msit",
@@ -68,6 +72,19 @@ describe("RSS 수집원 등록부", () => {
     });
     expect(source.requestPolicy.minIntervalMs).toBe(86_400_000);
     expect(source.requestPolicy.timeoutMs).toBe(15_000);
+    expect(ecSource).toMatchObject({
+      sourceId: "ec-digital-strategy",
+      publisherGroupId: "european-commission",
+      feedUrl: "https://digital-strategy.ec.europa.eu/en/rss.xml",
+      sourceRole: "independent",
+      sourceType: "research",
+      originType: "primary_document",
+      accessStatus: "allowed",
+    });
+    expect(ecSource.requestPolicy.minIntervalMs).toBe(86_400_000);
+    expect(ecSource.policyReferenceUrls).toContain(
+      "https://commission.europa.eu/legal-notice_en",
+    );
     expect(RSS_COLLECTOR_USER_AGENT).toContain("AI-Education-Today");
   });
 });
@@ -127,6 +144,34 @@ describe("안전한 RSS 수집", () => {
       author: "홍길동",
       excerpt: "짧은 소식",
     });
+  });
+
+  it("EU 공식 RSS에서는 CC BY 텍스트 teaser만 보존하고 이미지·캡션을 버린다", async () => {
+    const ecRss = `<?xml version="1.0" encoding="utf-8"?>
+      <rss version="2.0"><channel><item>
+        <title>Guidelines for teachers using AI in schools</title>
+        <link>https://digital-strategy.ec.europa.eu/en/news/teacher-ai-guidelines</link>
+        <guid>ec-teacher-ai-1</guid>
+        <pubDate>Thu, 13 Aug 2026 08:30:00 +0200</pubDate>
+        <description>&lt;div&gt;&lt;span&gt;metadata author&lt;/span&gt;
+          &lt;p class="ecl-page-header-standardised__description"&gt;New guidance helps school teachers use artificial intelligence safely and support pupils' digital literacy.&lt;/p&gt;
+          &lt;img src="https://example.invalid/photo.jpg" alt="identifiable child"&gt;
+          &lt;figcaption&gt;Third-party photo caption&lt;/figcaption&gt;&lt;/div&gt;</description>
+      </item></channel></rss>`;
+    const fetchMock = vi.fn(async () => response(ecRss)) as unknown as typeof fetch;
+
+    const outcome = await collectRssSource(ecSource, {
+      fetch: fetchMock,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.status).toBe("succeeded");
+    expect(outcome.items[0]?.excerpt).toBe(
+      "New guidance helps school teachers use artificial intelligence safely and support pupils' digital literacy.",
+    );
+    expect(JSON.stringify(outcome)).not.toContain("photo");
+    expect(JSON.stringify(outcome)).not.toContain("metadata author");
   });
 
   it("DTD와 엔티티를 포함한 XML을 전체 실패로 차단한다", async () => {

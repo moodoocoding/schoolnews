@@ -264,7 +264,7 @@ function checkSourceIndependence(
           independent.provenanceGroupKey !== primary.provenanceGroupKey,
       ),
     );
-    reason = "서로 다른 원출처의 공식 1차 자료와 독립 보도가 필요합니다.";
+    reason = "서로 다른 원출처의 공식 1차 자료와 독립 기관·연구·보도가 필요합니다.";
   } else if (policy === "two_independent_sources") {
     passed = publisherGroups.size >= 2 && provenanceGroups.size >= 2;
     reason = "소유·원출처가 서로 다른 신뢰 출처가 2개 이상 필요합니다.";

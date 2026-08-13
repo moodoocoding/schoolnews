@@ -113,7 +113,7 @@ export const topicCandidateSchema = z
       context.addIssue({
         code: "custom",
         path: ["independence", "hasPrimaryAndIndependent"],
-        message: "공식 자료+독립 보도 정책에는 두 유형의 근거가 모두 필요합니다.",
+        message: "공식 자료+독립 기관·연구·보도 정책에는 두 유형의 근거가 모두 필요합니다.",
       });
     }
 

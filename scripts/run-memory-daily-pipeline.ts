@@ -63,7 +63,7 @@ const result = await runMemoryDailyPipeline({
     maxRunSeconds: 300,
   },
   ownerId: "manual-memory-daily",
-  collectionConfigurationId: "official-rss-live-v1",
+  collectionConfigurationId: "licensed-production-sources-v2",
   collectSource: async (source, signal) => {
     const reservation = await sourceAttemptRepository.reserve({
       sourceId: source.sourceId,

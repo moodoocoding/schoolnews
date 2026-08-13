@@ -105,6 +105,18 @@ function truncate(value: string, maximum: number): string {
   return Array.from(value).slice(0, maximum).join("").trim();
 }
 
+function preferredExcerpt(rawExcerpt: string, source: SourceRegistryEntry): string {
+  if (source.sourceId !== "ec-digital-strategy") {
+    return stripMarkupToPlainText(rawExcerpt);
+  }
+
+  const decoded = decodeCharacterReferences(rawExcerpt);
+  const teaser = /<p\b[^>]*class=["'][^"']*\becl-page-header-standardised__description\b[^"']*["'][^>]*>([\s\S]*?)<\/p>/i.exec(
+    decoded,
+  )?.[1];
+  return stripMarkupToPlainText(teaser ?? "");
+}
+
 function resolveArticleLink(item: XmlRecord, baseUrl: string): string | null {
   const rssLink = textValue(item.link);
   if (rssLink !== null) {
@@ -197,7 +209,7 @@ function parseItem(
   const rawExcerpt = firstText(rawItem, ["description", "summary"]);
   const excerpt = rawExcerpt === null
     ? null
-    : truncate(stripMarkupToPlainText(rawExcerpt), 2_000) || null;
+    : truncate(preferredExcerpt(rawExcerpt, source), 800) || null;
 
   if (!fetchableSourceUrlSchema.safeParse(originalUrl).success) {
     throw new Error("유효한 HTTPS 원문 링크가 없습니다.");
