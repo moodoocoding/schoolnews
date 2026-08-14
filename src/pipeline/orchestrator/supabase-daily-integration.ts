@@ -632,26 +632,29 @@ export function createSupabaseDailyStages(
       } else {
         result = restrictToRollingEditorialWindow(result, context.runDate);
       }
-      // Only evidence-bearing historical articles are held to this registry
-      // consistency check. get_rolling_editorial_materials also returns
-      // discovery-only identity snapshots (rediscovery support) whose source
-      // may be legacy or since renamed; carryRollingMaterials below already
-      // drops any article outside the currently active source registry, so
-      // those rows must not block the whole collect stage.
+      // carryRollingMaterials below already drops any historical article
+      // outside the currently active source registry, so a decommissioned,
+      // renamed, or dev/test-seed source referenced by old evidence-bearing
+      // rows must not block the whole collect stage. Log it for
+      // observability instead of failing closed here.
       const evidenceArticleIds = new Set(
         historical.evidenceItems.map((item) => item.articleId),
       );
-      const historicalSourceIds = new Set(
+      const activeSourceIds = new Set(sources.map((source) => source.sourceId));
+      const staleEvidenceSourceIds = new Set(
         historical.articles
-          .filter((article) => evidenceArticleIds.has(article.articleId))
+          .filter(
+            (article) =>
+              evidenceArticleIds.has(article.articleId) &&
+              !activeSourceIds.has(article.sourceId),
+          )
           .map((article) => article.sourceId),
       );
-      if (
-        historicalSourceIds.size > 0 &&
-        historicalSourceIds.size !==
-          sources.filter((source) => historicalSourceIds.has(source.sourceId)).length
-      ) {
-        throw new DailyStepError("INVALID_SOURCE_DATA", false);
+      if (staleEvidenceSourceIds.size > 0) {
+        console.error(
+          "daily_collect_stale_evidence_source",
+          [...staleEvidenceSourceIds].join(","),
+        );
       }
       const resultWithHistory =
         result.carriedCount === historical.articles.length &&

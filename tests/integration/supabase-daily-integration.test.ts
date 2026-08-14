@@ -848,6 +848,52 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     });
   });
 
+  it("근거가 연결된 과거 기사의 출처가 폐기됐어도 collect 단계를 막지 않는다", async () => {
+    const fake = setup([primarySource]);
+    const decommissionedSource: SourceRegistryEntry = sourceRegistryEntrySchema.parse({
+      ...primarySource,
+      sourceId: "development-independent-news",
+      name: "폐기된 개발용 출처",
+      publisherGroupId: "development-independent-news",
+      provenanceGroupPrefix: "development-independent-news",
+      feedUrl: "https://decommissioned.example.org/rss.xml",
+      siteUrl: "https://decommissioned.example.org/",
+    });
+    const evidenceArticle = normalizeArticle(articleFor(primarySource), primarySource);
+    const evidence = createRssExcerptEvidenceItem(evidenceArticle, primarySource);
+    if (!evidence) throw new Error("TEST_EVIDENCE_REQUIRED");
+    const staleEvidenceArticle = normalizeArticle(
+      articleFor(decommissionedSource),
+      decommissionedSource,
+    );
+    const staleEvidence = createRssExcerptEvidenceItem(
+      staleEvidenceArticle,
+      decommissionedSource,
+    );
+    if (!staleEvidence) throw new Error("TEST_EVIDENCE_REQUIRED");
+    fake.options.editorialMaterials = {
+      getRolling: async () => ({
+        articles: [evidenceArticle, staleEvidenceArticle],
+        evidenceItems: [evidence, staleEvidence],
+      }),
+    };
+
+    const result = await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    expect(result.status).toBe("executed");
+    if (result.status !== "executed") return;
+    expect(result.journal.run.steps[0]).toMatchObject({
+      stage: "collect",
+      status: "succeeded",
+    });
+  });
+
   it("최근 7일의 동일 기사는 갱신된 피드 문구보다 저장된 근거 스냅샷을 유지한다", async () => {
     const fake = setup([primarySource]);
     const storedArticle = normalizeArticle(articleFor(primarySource), primarySource);
