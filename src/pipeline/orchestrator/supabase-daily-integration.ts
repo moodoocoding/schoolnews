@@ -338,25 +338,79 @@ function carryRollingMaterials(
   }>,
   allowedSourceIds: ReadonlySet<string>,
 ): NewsIngestionResult {
-  const currentArticleIds = new Set(result.articles.map((article) => article.articleId));
-  const carriedArticles = historical.articles.filter(
-    (article) =>
-      allowedSourceIds.has(article.sourceId) &&
-      !currentArticleIds.has(article.articleId),
+  const carriedArticles = historical.articles.filter((article) =>
+    allowedSourceIds.has(article.sourceId),
+  );
+  const carriedArticleIds = new Set(
+    carriedArticles.map((article) => article.articleId),
+  );
+  // A provider may correct punctuation or refresh its summary after the first
+  // collection. Prefer the already persisted snapshot while it remains in the
+  // seven-day editorial window so existing evidence lineage stays immutable.
+  const currentArticles = result.articles.filter(
+    (article) => !carriedArticleIds.has(article.articleId),
+  );
+  const currentArticleIds = new Set(
+    currentArticles.map((article) => article.articleId),
   );
   const articleById = new Map(
-    [...carriedArticles, ...result.articles].map((article) => [article.articleId, article]),
+    [...currentArticles, ...carriedArticles].map((article) => [article.articleId, article]),
   );
   const evidenceById = new Map(
-    [...historical.evidenceItems, ...result.evidenceItems]
+    [
+      ...result.evidenceItems.filter((item) =>
+        currentArticleIds.has(item.articleId),
+      ),
+      ...historical.evidenceItems.filter((item) =>
+        carriedArticleIds.has(item.articleId),
+      ),
+    ]
       .filter((item) => articleById.has(item.articleId))
       .map((item) => [item.evidenceId, item]),
   );
   return {
     ...structuredClone(result),
     carriedCount: carriedArticles.length,
+    deduplicatedCount: currentArticles.length,
+    storage: {
+      insertedCount: currentArticles.length,
+      duplicateCount: 0,
+      totalCount: currentArticles.length,
+    },
     articles: [...articleById.values()],
     evidenceItems: [...evidenceById.values()],
+    candidates: result.candidates.filter((candidate) =>
+      currentArticleIds.has(candidate.articleId),
+    ),
+  };
+}
+
+function restrictToRollingEditorialWindow(
+  result: Readonly<NewsIngestionResult>,
+  runDate: string,
+): NewsIngestionResult {
+  const materials = selectEditorialWindowMaterials({
+    runDate,
+    windowDays: EDITORIAL_ROLLING_WINDOW_DAYS,
+    articles: result.articles,
+    evidenceItems: result.evidenceItems,
+  });
+  const articleIds = new Set(
+    materials.articles.map((article) => article.articleId),
+  );
+  return {
+    ...structuredClone(result),
+    deduplicatedCount: materials.articles.length,
+    storage: {
+      insertedCount: materials.articles.length,
+      duplicateCount: 0,
+      totalCount: materials.articles.length,
+    },
+    articles: materials.articles,
+    evidenceItems: materials.evidenceItems,
+    candidates: result.candidates.filter((candidate) =>
+      articleIds.has(candidate.articleId),
+    ),
   };
 }
 
@@ -570,6 +624,8 @@ export function createSupabaseDailyStages(
           );
         }
         result = historicalFallbackResult({ failedResult: result, historical });
+      } else {
+        result = restrictToRollingEditorialWindow(result, context.runDate);
       }
       const historicalSourceIds = new Set(
         historical.articles.map((article) => article.sourceId),

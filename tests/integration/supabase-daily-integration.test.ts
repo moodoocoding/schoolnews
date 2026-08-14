@@ -804,6 +804,71 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     expect(fake.publishInputs).toHaveLength(0);
   });
 
+  it("최근 7일의 동일 기사는 갱신된 피드 문구보다 저장된 근거 스냅샷을 유지한다", async () => {
+    const fake = setup([primarySource]);
+    const storedArticle = normalizeArticle(articleFor(primarySource), primarySource);
+    const storedEvidence = createRssExcerptEvidenceItem(storedArticle, primarySource);
+    if (!storedEvidence) throw new Error("TEST_EVIDENCE_REQUIRED");
+    fake.options.editorialMaterials = {
+      getRolling: async () => ({
+        articles: [storedArticle],
+        evidenceItems: [storedEvidence],
+      }),
+    };
+    fake.options.collectSource = async (source) => ({
+      ...outcomeFor(source),
+      items: [
+        {
+          ...articleFor(source),
+          title: `${articleFor(source).title} `,
+          excerpt: `${articleFor(source).excerpt} 갱신 문구`,
+        },
+      ],
+    });
+
+    await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    const persisted = fake.contentPersistence.collectInputs[0];
+    expect(persisted.articles).toEqual([storedArticle]);
+    expect(persisted.evidenceItems).toEqual([storedEvidence]);
+    expect(
+      (persisted.artifact.payload as { value: { carriedCount?: number } }).value
+        .carriedCount,
+    ).toBe(1);
+  });
+
+  it("7일 편집 창보다 오래된 피드 항목은 collect 영속 입력에서 제외한다", async () => {
+    const fake = setup([primarySource]);
+    fake.options.collectSource = async (source) => ({
+      ...outcomeFor(source),
+      items: [
+        {
+          ...articleFor(source),
+          externalId: `${source.sourceId}-old`,
+          originalUrl: `${source.siteUrl}article/old-item`,
+          publishedAt: "2026-08-01T00:00:00+09:00",
+        },
+      ],
+    });
+
+    await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    expect(fake.contentPersistence.collectInputs[0].articles).toEqual([]);
+    expect(fake.contentPersistence.collectInputs[0].evidenceItems).toEqual([]);
+  });
+
   it("모호한 collect 커밋을 terminal로 닫지 않고 lease 회수 후 exact artifact만 재사용한다", async () => {
     const fake = setup([primarySource, independentSource]);
     let currentTime = Date.parse("2026-08-12T21:00:00.000Z");
