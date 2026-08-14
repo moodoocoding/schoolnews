@@ -262,6 +262,14 @@ function asDailyPersistenceError(error: unknown): DailyStepError {
     // The repository exposes only a bounded stable code. Log neither payloads,
     // article text, credentials nor the underlying remote error.
     console.error("daily_content_persistence_failure", error.code);
+  } else {
+    // An unexpected (non-repository) failure must never be silently folded
+    // into INVALID_SOURCE_DATA without a trace. Only the error's own name is
+    // stable and safe to log; the message may carry request/article details.
+    console.error(
+      "daily_content_persistence_unexpected_failure",
+      error instanceof Error ? error.name : typeof error,
+    );
   }
   if (
     error instanceof SupabaseContentPersistenceError &&
