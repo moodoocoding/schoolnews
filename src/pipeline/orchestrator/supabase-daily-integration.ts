@@ -632,8 +632,19 @@ export function createSupabaseDailyStages(
       } else {
         result = restrictToRollingEditorialWindow(result, context.runDate);
       }
+      // Only evidence-bearing historical articles are held to this registry
+      // consistency check. get_rolling_editorial_materials also returns
+      // discovery-only identity snapshots (rediscovery support) whose source
+      // may be legacy or since renamed; carryRollingMaterials below already
+      // drops any article outside the currently active source registry, so
+      // those rows must not block the whole collect stage.
+      const evidenceArticleIds = new Set(
+        historical.evidenceItems.map((item) => item.articleId),
+      );
       const historicalSourceIds = new Set(
-        historical.articles.map((article) => article.sourceId),
+        historical.articles
+          .filter((article) => evidenceArticleIds.has(article.articleId))
+          .map((article) => article.sourceId),
       );
       if (
         historicalSourceIds.size > 0 &&

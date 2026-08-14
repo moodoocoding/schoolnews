@@ -804,6 +804,50 @@ describe("Supabase fake-only 전체 일일 실행", () => {
     expect(fake.publishInputs).toHaveLength(0);
   });
 
+  it("근거 없는 discovery-only 과거 기사는 활성 출처 목록에 없어도 collect 단계를 막지 않는다", async () => {
+    const fake = setup([primarySource]);
+    const legacySource: SourceRegistryEntry = sourceRegistryEntrySchema.parse({
+      ...primarySource,
+      sourceId: "naver-news-legacy-example",
+      name: "레거시 발견 전용 출처",
+      publisherGroupId: "naver-news-legacy-example",
+      provenanceGroupPrefix: "naver-news-legacy-example",
+      feedUrl: "https://legacy-discovery.example.org/rss.xml",
+      siteUrl: "https://legacy-discovery.example.org/",
+    });
+    const evidenceArticle = normalizeArticle(articleFor(primarySource), primarySource);
+    const evidence = createRssExcerptEvidenceItem(evidenceArticle, primarySource);
+    if (!evidence) throw new Error("TEST_EVIDENCE_REQUIRED");
+    const discoveryOnlyArticle = normalizeArticle(
+      {
+        ...articleFor(legacySource),
+        externalId: `${legacySource.sourceId}-discovery`,
+      },
+      legacySource,
+    );
+    fake.options.editorialMaterials = {
+      getRolling: async () => ({
+        articles: [evidenceArticle, discoveryOnlyArticle],
+        evidenceItems: [evidence],
+      }),
+    };
+
+    const result = await runSupabaseDailyPipeline({
+      ...fake.options,
+      executionMode: "dry_run",
+      generation: undefined,
+      publisher: undefined,
+      publishReceipt: undefined,
+    });
+
+    expect(result.status).toBe("executed");
+    if (result.status !== "executed") return;
+    expect(result.journal.run.steps[0]).toMatchObject({
+      stage: "collect",
+      status: "succeeded",
+    });
+  });
+
   it("최근 7일의 동일 기사는 갱신된 피드 문구보다 저장된 근거 스냅샷을 유지한다", async () => {
     const fake = setup([primarySource]);
     const storedArticle = normalizeArticle(articleFor(primarySource), primarySource);
