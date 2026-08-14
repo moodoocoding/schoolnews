@@ -258,6 +258,11 @@ function generationUsage(value: Readonly<GenerationUsage>): GenerationUsage {
 }
 
 function asDailyPersistenceError(error: unknown): DailyStepError {
+  if (error instanceof SupabaseContentPersistenceError) {
+    // The repository exposes only a bounded stable code. Log neither payloads,
+    // article text, credentials nor the underlying remote error.
+    console.error("daily_content_persistence_failure", error.code);
+  }
   if (
     error instanceof SupabaseContentPersistenceError &&
     error.code === "LEASE_EXPIRED"
