@@ -18,9 +18,12 @@ describe("august 14 score-diagnosis failure recovery", () => {
     for (const table of ["posts", "model_calls", "model_invocation_intents"]) {
       expect(sql).toContain(`news_clipping_private.${table}`);
     }
-    // The completed collect artifact is intentionally kept so the next
-    // attempt can reuse it, unlike the earlier 034-036 resets.
-    expect(sql).not.toContain("pipeline_artifacts");
+    // pipeline_artifacts_run_id_fkey forces the collect artifact to be
+    // deleted together with the run row (foreign key, verified against the
+    // live database), so the next attempt re-collects instead of reusing it.
+    expect(sql).toContain(
+      "delete from news_clipping_private.pipeline_artifacts",
+    );
     expect(sql).toContain(
       "message = 'august14_score_diagnosis_reset_refused'",
     );

@@ -3,9 +3,10 @@
 -- the repeated score-stage INVALID_SOURCE_DATA can be read from production
 -- logs. Remove only the exact 2026-08-14 terminal failure when it has no
 -- selected topic, publish, or model output. Any observable work makes this
--- migration fail closed. Unlike the earlier 034-036 resets, a completed
--- collect artifact is intentionally left in place so the next attempt can
--- reuse it instead of re-collecting.
+-- migration fail closed. pipeline_artifacts_run_id_fkey forces the
+-- completed collect artifact to be removed together with the run row, so
+-- the next attempt re-collects rather than reusing it (unlike the original
+-- plan of keeping it for reuse).
 
 begin;
 
@@ -40,6 +41,9 @@ begin
      ) then
     raise exception using errcode = 'P0001', message = 'AUGUST14_SCORE_DIAGNOSIS_RESET_REFUSED';
   end if;
+
+  delete from news_clipping_private.pipeline_artifacts
+  where run_id = v_run_id;
 
   delete from news_clipping_private.daily_runs
   where run_date = v_run_date and run_id = v_run_id;
