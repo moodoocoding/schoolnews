@@ -21,6 +21,10 @@ import {
   type ModelInvocationLedger,
   type ModelInvocationReservation,
 } from "../generation";
+import {
+  recoveryRequired,
+  stableJson,
+} from "../generation/generation-support";
 import { SEMANTIC_EVALUATOR_PROMPT_VERSION } from "./ai-sdk-semantic-evaluator";
 import type {
   PostGenerationSemanticEvaluationResult,
@@ -81,17 +85,6 @@ type Context = Readonly<{
   requestFingerprint: string;
   evidenceIds: readonly string[];
 }>;
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
 
 export function createSemanticReviewRequestFingerprint(input: {
   runId: string;
@@ -193,12 +186,6 @@ function normalizeAudit(
     return null;
   }
   return parsed.data;
-}
-
-function recoveryRequired(audit?: ModelCallAudit): GenerationProviderError {
-  return new GenerationProviderError("MODEL_INVOCATION_RECOVERY_REQUIRED", {
-    audit: audit ?? null,
-  });
 }
 
 export class LedgeredSemanticEvaluator

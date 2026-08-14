@@ -357,38 +357,38 @@ export const AUGUST_2026_BACKFILL_TOPICS: readonly BackfillTopic[] = [
     summary:
       "AI를 잘 쓴다는 것은 빠른 답보다 목적을 정하고 결과를 확인하며 자신의 판단을 설명하는 일에 가깝습니다.",
     primaryText:
-      "경제협력개발기구와 유럽연합 집행위원회의 틀은 학생이 AI를 사용하고 만들고 관리하며 방향을 바꾸는 역량을 제시합니다.",
+      "경제협력개발기구는 강력한 AI 시대에 교육이 지식과 기능, 태도를 다시 살펴야 한다고 제안합니다.",
     independentText:
-      "유네스코는 AI 기술 이해와 함께 인간 중심 관점과 윤리, 책임 있는 창작을 학생 역량에 포함합니다.",
+      "별도의 OECD 교육시스템 보고서는 AI 리터러시가 기술 지식뿐 아니라 사회적 영향과 윤리적 판단을 포함한다고 설명합니다.",
     synthesisText:
       "수업에서는 정답을 복사하는 대신 답의 근거와 빠진 관점을 찾고 다른 사람에게 설명하는 과정을 평가할 수 있습니다.",
     question: "AI의 답을 내 생각으로 바꾸려면 어떤 확인과 설명이 필요할까요?",
     sources: [
       {
-        publisher: "OECD·European Commission",
+        publisher: "OECD",
         publisherType: "official",
         sourceType: "primary",
         sourceRole: "primary",
         originType: "primary_document",
-        documentTitle: "AI literacy framework for primary and secondary education",
-        url: "https://www.oecd.org/en/publications/empowering-learners-for-the-age-of-ai_65cd27d4-en.html",
-        publishedAt: "2026-06-18T00:00:00Z",
+        documentTitle: "What should teachers teach and students learn in a future of powerful AI?",
+        url: "https://www.oecd.org/en/publications/what-should-teachers-teach-and-students-learn-in-a-future-of-powerful-ai_ca56c7d6-en.html",
+        publishedAt: "2025-05-23T00:00:00Z",
         passage:
-          "학생 AI 리터러시 틀은 AI에 참여하고 창작하며 관리하고 방향을 바꾸는 역량을 지식과 기능, 태도의 결합으로 설명하고 초중등 교육에서 활용하도록 제안한다.",
+          "강력한 AI가 빠르게 발전하는 상황에서 교육과정은 학생에게 필요한 지식, 기능과 태도를 다시 검토하고 학습 경험의 구성도 함께 살펴야 한다고 제안한다.",
         policyUrl: "https://www.oecd.org/en/about/terms-conditions.html",
       },
       {
-        publisher: "UNESCO",
+        publisher: "OECD·Fondazione Agnelli",
         publisherType: "research",
         sourceType: "research",
         sourceRole: "independent",
         originType: "primary_document",
-        documentTitle: "Student AI competency framework",
-        url: "https://www.unesco.org/en/articles/ai-competency-framework-students",
-        publishedAt: "2024-08-08T00:00:00Z",
+        documentTitle: "AI adoption in the education system",
+        url: "https://www.oecd.org/en/publications/ai-adoption-in-the-education-system_69bd0a4a-en.html",
+        publishedAt: "2025-12-11T00:00:00Z",
         passage:
-          "유네스코는 학생이 AI의 기술과 응용을 이해하는 것과 함께 인간 중심 관점, 윤리, 책임 있는 시스템 설계와 공동 창작을 배워야 한다고 제시한다.",
-        policyUrl: "https://www.unesco.org/en/open-access/creative-commons",
+          "교육에서의 AI 리터러시는 작동 방식과 활용법만이 아니라 사회적 영향, 한계와 위험을 이해하고 책임 있게 판단하는 능력을 함께 포함한다고 설명한다.",
+        policyUrl: "https://www.oecd.org/en/about/terms-conditions.html",
       },
     ],
   },

@@ -168,18 +168,15 @@ function validateAuditForAttempt(
   const expectedEvidenceIds = evidenceItems.map((item) => item.evidenceId).sort();
   const auditEvidenceIds = [...audit.evidenceIds].sort();
 
+  // Provider/promptVersion is intentionally not compared against prior
+  // audits: a route fallback (rate limit, model unavailable) legitimately
+  // reports a different provider for the same attempt, and rejecting that
+  // here would discard an otherwise successful fallback result.
   if (
     audit.attemptNumber !== attemptNumber ||
     audit.purpose !== expectedPurpose ||
     JSON.stringify(auditEvidenceIds) !== JSON.stringify(expectedEvidenceIds) ||
-    priorAudits.some((prior) => prior.callId === audit.callId) ||
-    priorAudits
-      .filter((prior) => prior.purpose !== "semantic_review")
-      .some(
-      (prior) =>
-        prior.providerId !== audit.providerId ||
-        prior.promptVersion !== audit.promptVersion,
-      )
+    priorAudits.some((prior) => prior.callId === audit.callId)
   ) {
     throw new GenerationProviderError("INVALID_MODEL_USAGE");
   }
@@ -195,20 +192,15 @@ function validateSemanticAudit(
   const audit = modelCallAuditSchema.parse(candidate);
   const expectedEvidenceIds = evidenceItems.map((item) => item.evidenceId).sort();
   const auditEvidenceIds = [...audit.evidenceIds].sort();
-  const priorSemanticAudits = priorAudits.filter(
-    (prior) => prior.purpose === "semantic_review",
-  );
 
+  // See validateAuditForAttempt: provider/promptVersion consistency is not
+  // enforced against prior audits so a semantic-review route fallback is not
+  // mistaken for invalid model usage.
   if (
     audit.attemptNumber !== attemptNumber ||
     audit.purpose !== "semantic_review" ||
     JSON.stringify(auditEvidenceIds) !== JSON.stringify(expectedEvidenceIds) ||
-    priorAudits.some((prior) => prior.callId === audit.callId) ||
-    priorSemanticAudits.some(
-      (prior) =>
-        prior.providerId !== audit.providerId ||
-        prior.promptVersion !== audit.promptVersion,
-    )
+    priorAudits.some((prior) => prior.callId === audit.callId)
   ) {
     throw new GenerationProviderError("INVALID_MODEL_USAGE");
   }

@@ -50,8 +50,9 @@ const supabaseSecretKey: string =
   (() => {
     throw new Error("AUGUST_2026_BACKFILL_SECRET_REQUIRED");
   })();
+let databaseClockOffsetMs = 0;
 
-async function assertBackfillBoundaryReady(): Promise<void> {
+async function assertBackfillBoundaryReady(): Promise<Set<string>> {
   const response = await fetch(environment.SUPABASE_URL + "/rest/v1/", {
     headers: {
       accept: "application/openapi+json",
@@ -64,6 +65,15 @@ async function assertBackfillBoundaryReady(): Promise<void> {
   if (!response.ok) {
     throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_UNAVAILABLE");
   }
+  const databaseDateHeader = response.headers.get("date");
+  if (databaseDateHeader === null) {
+    throw new Error("AUGUST_2026_BACKFILL_SERVER_CLOCK_REQUIRED");
+  }
+  const databaseNowMs = Date.parse(databaseDateHeader);
+  if (!Number.isFinite(databaseNowMs)) {
+    throw new Error("AUGUST_2026_BACKFILL_SERVER_CLOCK_REQUIRED");
+  }
+  databaseClockOffsetMs = databaseNowMs - Date.now() + 1_000;
   const specification = (await response.json()) as { paths?: unknown };
   if (
     specification.paths === null ||
@@ -74,10 +84,13 @@ async function assertBackfillBoundaryReady(): Promise<void> {
   }
 
   const dates = AUGUST_2026_BACKFILL_TOPICS.map((topic) => topic.runDate);
+  const expectedTitleByDate = new Map(
+    AUGUST_2026_BACKFILL_TOPICS.map((topic) => [topic.runDate, topic.title]),
+  );
   const existingUrl = new URL(
     environment.SUPABASE_URL + "/rest/v1/published_posts",
   );
-  existingUrl.searchParams.set("select", "publication_date_kst");
+  existingUrl.searchParams.set("select", "publication_date_kst,title");
   existingUrl.searchParams.set(
     "publication_date_kst",
     "in.(" + dates.join(",") + ")",
@@ -98,12 +111,48 @@ async function assertBackfillBoundaryReady(): Promise<void> {
   if (!Array.isArray(existing)) {
     throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_INVALID_RESPONSE");
   }
-  if (existing.length > 0) {
+  const existingRows = existing.flatMap((row) =>
+    row !== null &&
+    typeof row === "object" &&
+    "publication_date_kst" in row &&
+    typeof row.publication_date_kst === "string" &&
+    "title" in row &&
+    typeof row.title === "string"
+      ? [{ date: row.publication_date_kst, title: row.title }]
+      : [],
+  );
+  if (existingRows.length !== existing.length) {
+    throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_INVALID_RESPONSE");
+  }
+  const unexpectedDates = existingRows.filter(
+    (row) => !dates.includes(row.date),
+  );
+  if (unexpectedDates.length > 0) {
+    throw new Error("AUGUST_2026_BACKFILL_PREFLIGHT_INVALID_RESPONSE");
+  }
+  // A date inside the target range is only safe to skip as "already done" if
+  // the published title matches this backfill's own content for that date.
+  // Any other occupant of the date is treated exactly like the old
+  // all-or-nothing guard: abort instead of silently overwriting or ignoring it.
+  const foreignOccupants = existingRows.filter(
+    (row) => row.title !== expectedTitleByDate.get(row.date),
+  );
+  if (foreignOccupants.length > 0) {
     throw new Error("AUGUST_2026_BACKFILL_DATES_ALREADY_OCCUPIED");
   }
+  return new Set(existingRows.map((row) => row.date));
 }
 
-await assertBackfillBoundaryReady();
+const alreadyPublishedDates = await assertBackfillBoundaryReady();
+const requestedStartDate = process.env.BACKFILL_START_DATE;
+if (
+  requestedStartDate !== undefined &&
+  !AUGUST_2026_BACKFILL_TOPICS.some(
+    (topic) => topic.runDate === requestedStartDate,
+  )
+) {
+  throw new Error("AUGUST_2026_BACKFILL_START_DATE_INVALID");
+}
 
 const baseSource = RSS_SOURCE_REGISTRY[0];
 
@@ -229,6 +278,20 @@ const initialHistory = await repositories.publicationHistory.getRecent(365);
 const publishedTitles: string[] = [];
 
 for (const topic of AUGUST_2026_BACKFILL_TOPICS) {
+  if (requestedStartDate !== undefined && topic.runDate < requestedStartDate) {
+    continue;
+  }
+  if (alreadyPublishedDates.has(topic.runDate)) {
+    publishedTitles.push(topic.title);
+    console.log(
+      JSON.stringify({
+        event: "august_2026_backfill_date_already_published",
+        runDate: topic.runDate,
+        actualGeminiCalls: false,
+      }),
+    );
+    continue;
+  }
   const sources = topic.sources.map((source, index) =>
     createSource(topic, source, index),
   );
@@ -324,6 +387,7 @@ for (const topic of AUGUST_2026_BACKFILL_TOPICS) {
     },
     runDate: topic.runDate,
     ownerId: "approved-august-2026-backfill",
+    now: () => new Date(Date.now() + databaseClockOffsetMs),
   });
 
   if (

@@ -203,6 +203,28 @@ export function estimateModelCost(
   return estimatedCostUsd;
 }
 
+/** Deterministic JSON serialization used to fingerprint requests for the ledger. */
+export function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function recoveryRequired(
+  audit?: ModelCallAudit,
+): GenerationProviderError {
+  return new GenerationProviderError("MODEL_INVOCATION_RECOVERY_REQUIRED", {
+    audit: audit ?? null,
+  });
+}
+
 export function createModelCallAudit(input: {
   callId: string;
   request: GeneratedPostGenerationRequest;

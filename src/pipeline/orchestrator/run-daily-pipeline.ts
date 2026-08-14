@@ -584,6 +584,12 @@ export async function runDailyPipeline(
   ) {
     throw new Error("저장소가 요청과 다른 실행권 또는 저널을 반환했습니다.");
   }
+  // journal.startedAt is server-clock authoritative (set via clock_timestamp()
+  // by the acquire/checkpoint RPC); `started` is this worker's local clock at
+  // the same moment. The gap corrects later deadline comparisons for drift
+  // between the worker's clock and the database server's clock.
+  const clockOffsetMs = new Date(journal.startedAt).getTime() - started.getTime();
+  const serverAdjustedMs = (date: Date): number => date.getTime() + clockOffsetMs;
   const expectedStages = stages.map((stage) => stage.stage);
   emit(options.onEvent, {
     type: acquired.recoveredExpiredLease
@@ -764,6 +770,14 @@ export async function runDailyPipeline(
     }
   }
 
+  // A model-capable stage that proves (via canRecoverInterrupted) it already
+  // durably stored a matching result is granted one extra attempt beyond its
+  // normal retry cap, so the engine can pick that result up on the next pass
+  // instead of discarding an already-paid-for success. The bonus attempt is
+  // safe because the stage's own execute() must detect and reuse the stored
+  // artifact rather than invoking the model again.
+  const recoveryBonusAttempts = new Map<PipelineStage, number>();
+
   if (acquired.recoveredExpiredLease) {
     const interrupted = journal.run.steps.find(
       (step) => step.status === "running",
@@ -880,7 +894,11 @@ export async function runDailyPipeline(
           !ambiguousPublish &&
           !uncertainModelInvocation &&
           interrupted.attemptNumber <
-            (interruptedDefinition?.retryPolicy.maxAttempts ?? 0);
+            (interruptedDefinition?.retryPolicy.maxAttempts ?? 0) +
+              (recoverableModelOutput ? 1 : 0);
+        if (canRetry && recoverableModelOutput) {
+          recoveryBonusAttempts.set(interrupted.stage, 1);
+        }
         journal = journalWithUpdate(
           journal,
           recoveredAt.toISOString(),
@@ -983,11 +1001,14 @@ export async function runDailyPipeline(
           .filter((attempt) => attempt.stage === definition.stage)
           .map((attempt) => attempt.attemptNumber),
       ) + 1;
+    const effectiveMaxAttempts =
+      definition.retryPolicy.maxAttempts +
+      (recoveryBonusAttempts.get(definition.stage) ?? 0);
 
-    while (attemptNumber <= definition.retryPolicy.maxAttempts) {
+    while (attemptNumber <= effectiveMaxAttempts) {
       const attemptStarted = now();
       if (
-        attemptStarted.getTime() >= deadlineAt ||
+        serverAdjustedMs(attemptStarted) >= deadlineAt ||
         options.abortSignal?.aborted
       ) {
         const interruptionCode = options.abortSignal?.aborted
@@ -1054,7 +1075,7 @@ export async function runDailyPipeline(
 
       try {
         const stageCallAt = now();
-        const remainingRunMs = deadlineAt - stageCallAt.getTime();
+        const remainingRunMs = deadlineAt - serverAdjustedMs(stageCallAt);
         const remainingLeaseMs =
           new Date(lease.expiresAt).getTime() - stageCallAt.getTime();
         const effectiveTimeoutMs = Math.floor(
@@ -1104,7 +1125,7 @@ export async function runDailyPipeline(
             Math.floor(
               Math.min(
                 definition.retryPolicy.timeoutMs,
-                deadlineAt - now().getTime(),
+                deadlineAt - serverAdjustedMs(now()),
                 new Date(lease.expiresAt).getTime() -
                   now().getTime() -
                   LEASE_COMPLETION_SAFETY_MS,
@@ -1118,7 +1139,7 @@ export async function runDailyPipeline(
         }
         const finishedAt = now();
         const deadlineExceededAfterSuccess =
-          finishedAt.getTime() > deadlineAt;
+          serverAdjustedMs(finishedAt) > deadlineAt;
         const budgetBlocked =
           (result.outcome === "withheld" &&
             result.reason === "BUDGET_EXCEEDED") ||
@@ -1246,7 +1267,7 @@ export async function runDailyPipeline(
         const failedAt = now();
         const delayMs = nextDelay(definition.retryPolicy, attemptNumber);
         const deadlineAllowsRetry =
-          failedAt.getTime() + delayMs < deadlineAt;
+          serverAdjustedMs(failedAt) + delayMs < deadlineAt;
         const failureUsage =
           error.usage ??
           (MODEL_CAPABLE_STAGES.has(definition.stage)
@@ -1382,7 +1403,7 @@ export async function runDailyPipeline(
       }
     }
 
-    if (attemptNumber > definition.retryPolicy.maxAttempts) {
+    if (attemptNumber > effectiveMaxAttempts) {
       return finish("failed", now(), "UNKNOWN_ERROR");
     }
   }

@@ -13,6 +13,8 @@ import {
 import { GENERATED_POST_PROMPT_VERSION } from "../../prompts/generated-post-v2";
 import { GenerationProviderError } from "./errors";
 import {
+  recoveryRequired,
+  stableJson,
   validateGenerationRequest,
   validateProviderMetadata,
 } from "./generation-support";
@@ -166,19 +168,6 @@ type InvocationContext = Readonly<{
   evidenceIds: readonly string[];
 }>;
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(",")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 export function createGenerationRequestFingerprint(input: {
   runId: string;
   scoreOutputReference: string;
@@ -272,17 +261,12 @@ function normalizeAudit(
     parsed.data.providerId !== metadata.providerId ||
     parsed.data.modelId !== metadata.modelId ||
     parsed.data.promptVersion !== promptVersion ||
+    parsed.data.estimatedCostUsd === null ||
     JSON.stringify(parsed.data.evidenceIds) !== JSON.stringify(evidenceIds)
   ) {
     return null;
   }
   return parsed.data;
-}
-
-function recoveryRequired(audit?: ModelCallAudit): GenerationProviderError {
-  return new GenerationProviderError("MODEL_INVOCATION_RECOVERY_REQUIRED", {
-    audit: audit ?? null,
-  });
 }
 
 export class LedgeredGeneratedPostProvider implements GeneratedPostProvider {
