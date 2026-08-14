@@ -991,7 +991,14 @@ export async function runDailyPipeline(
         definition,
         { runId, runDate, stage: definition.stage },
       );
-    } catch {
+    } catch (caught) {
+      // The specific failure must stay visible in server logs instead of
+      // being reduced to a single terminal error code with no trace.
+      console.error(
+        "daily_stage_input_fingerprint_failure",
+        definition.stage,
+        caught instanceof Error ? caught.name : typeof caught,
+      );
       return finish("blocked", now(), "INVALID_SOURCE_DATA");
     }
     let attemptNumber =
