@@ -746,24 +746,40 @@ export async function runDailyPipeline(
         definition,
         { runId, runDate, stage: definition.stage },
       );
-      reusable =
-        completed.inputFingerprint === expectedInputFingerprint &&
-      (await validateOutputReferenceWithin(
+      const fingerprintMatches =
+        completed.inputFingerprint === expectedInputFingerprint;
+      const remainingLeaseMs =
+        new Date(lease.expiresAt).getTime() - now().getTime();
+      const referenceTimeoutMs = Math.floor(
+        Math.min(
+          definition.retryPolicy.timeoutMs,
+          remainingLeaseMs - LEASE_COMPLETION_SAFETY_MS,
+        ),
+      );
+      const referenceValid = await validateOutputReferenceWithin(
         definition,
         completed.outputReference,
-        Math.floor(
-          Math.min(
-            definition.retryPolicy.timeoutMs,
-            new Date(lease.expiresAt).getTime() -
-              now().getTime() -
-              LEASE_COMPLETION_SAFETY_MS,
-          ),
-        ),
+        referenceTimeoutMs,
         options.abortSignal,
         { runId, runDate, stage: definition.stage },
-      ));
-    } catch {
+      );
+      reusable = fingerprintMatches && referenceValid;
+      if (!reusable) {
+        console.error(
+          "daily_stage_reuse_check_failed",
+          definition.stage,
+          fingerprintMatches,
+          referenceValid,
+          referenceTimeoutMs,
+        );
+      }
+    } catch (caught) {
       reusable = false;
+      console.error(
+        "daily_stage_reuse_check_threw",
+        definition.stage,
+        caught instanceof Error ? caught.name : typeof caught,
+      );
     }
     if (!reusable) {
       return finish("blocked", now(), "PIPELINE_VERSION_MISMATCH");
