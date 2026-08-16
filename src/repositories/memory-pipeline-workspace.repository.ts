@@ -167,9 +167,14 @@ const newsIngestionResultSchema: z.ZodType<NewsIngestionResult> = z
     const failedCount = result.outcomes.filter(
       (outcome) => outcome.status === "failed",
     ).length;
+    // Every source failing is only a total failure when the run also has no
+    // usable material. Carrying still-valid articles from the recent editorial
+    // window keeps the run partial rather than failed.
     const expectedStatus =
       result.deduplicatedCount === 0 && failedCount === result.outcomes.length
-        ? "failed"
+        ? (result.carriedCount ?? 0) > 0
+          ? "partial"
+          : "failed"
         : failedCount > 0 ||
             result.outcomes.some((outcome) => outcome.status === "partial")
           ? "partial"
@@ -209,17 +214,30 @@ const newsIngestionResultSchema: z.ZodType<NewsIngestionResult> = z
         message: "선정 근거 ID는 고유해야 합니다.",
       });
     }
+    // Evidence attached to a candidate must exist and must not be attached
+    // twice. Evidence belonging to an article carried over from the recent
+    // editorial window has no candidate in this run and therefore stays
+    // unattached, but evidence for an article collected in this run must
+    // still be attached to that article's candidate.
+    const attachedEvidenceIds = result.candidates.flatMap(
+      (candidate) => candidate.evidenceIds,
+    );
+    const attachedEvidenceIdSet = new Set(attachedEvidenceIds);
+    const candidateArticleIdSet = new Set(candidateArticleIds);
     if (
-      result.candidates.flatMap((candidate) => candidate.evidenceIds).length !==
-        evidenceIds.length ||
-      result.candidates.some((candidate) =>
-        candidate.evidenceIds.some((evidenceId) => !evidenceIdSet.has(evidenceId)),
+      attachedEvidenceIdSet.size !== attachedEvidenceIds.length ||
+      attachedEvidenceIds.some((evidenceId) => !evidenceIdSet.has(evidenceId)) ||
+      result.evidenceItems.some(
+        (item) =>
+          candidateArticleIdSet.has(item.articleId) &&
+          !attachedEvidenceIdSet.has(item.evidenceId),
       )
     ) {
       context.addIssue({
         code: "custom",
         path: ["candidates"],
-        message: "후보 평가 근거 ID는 저장된 근거와 정확히 일치해야 합니다.",
+        message:
+          "후보 평가 근거 ID는 저장된 근거와 일치해야 하며, 이번 실행에서 수집한 기사의 근거는 후보에 연결돼야 합니다.",
       });
     }
     if (result.evidenceItems.some((item) => !articleIdSet.has(item.articleId))) {
@@ -534,7 +552,14 @@ const STAGE_BY_ARTIFACT_KIND: Readonly<
   post_generation: "generate",
 };
 
-function parseArtifact(artifact: PipelineWorkspaceArtifact): ParsedArtifact {
+/**
+ * Validates an artifact payload against its runtime contract. Exported so the
+ * persistent workspace can apply the same contract on write that it applies
+ * when reading the artifact back.
+ */
+export function parseArtifact(
+  artifact: PipelineWorkspaceArtifact,
+): ParsedArtifact {
   try {
     switch (artifact.kind) {
       case "news_ingestion":

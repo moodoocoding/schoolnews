@@ -440,10 +440,13 @@ function historicalFallbackResult(input: {
     // they do not discard already persisted, still-valid editorial material.
     status: "partial",
     carriedCount: input.historical.articles.length,
+    // Carried articles were stored by earlier runs, so this run inserted
+    // nothing. storage describes only this run's upserts and must stay
+    // consistent with deduplicatedCount, which is zero when every source failed.
     storage: {
       insertedCount: 0,
-      duplicateCount: input.historical.articles.length,
-      totalCount: input.historical.articles.length,
+      duplicateCount: 0,
+      totalCount: 0,
     },
     articles: [...structuredClone(input.historical.articles)],
     evidenceItems: [...structuredClone(input.historical.evidenceItems)],

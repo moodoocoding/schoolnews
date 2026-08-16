@@ -4,6 +4,10 @@ import type {
   NewsIngestionResult,
 } from "../../src/pipeline/orchestrator/run-news-ingestion";
 import type { PostGenerationResult } from "../../src/pipeline/orchestrator/run-post-generation";
+import type { ArticleInput, SourceRegistryEntry } from "../../src/contracts";
+import { RSS_SOURCE_REGISTRY } from "../../src/pipeline/collectors";
+import { normalizeArticle } from "../../src/pipeline/normalize";
+import { createRssExcerptEvidenceItem } from "../../src/pipeline/retrieval";
 import {
   MemoryPipelineWorkspaceRepository,
   PipelineWorkspaceError,
@@ -37,6 +41,90 @@ function ingestionResult(): NewsIngestionResult {
     articles: [],
     evidenceItems: [],
     candidates: [],
+    runIssues: [],
+  };
+}
+
+function articleInput(
+  source: SourceRegistryEntry,
+  suffix: string,
+): ArticleInput {
+  return {
+    sourceId: source.sourceId,
+    externalId: `${source.sourceId}-${suffix}`,
+    originalUrl: `${source.siteUrl}article/${suffix}`,
+    title: "초등학교 AI 디지털 교육 개인정보 보호 지침 발표",
+    excerpt:
+      "초등학교 수업에서 인공지능 서비스를 사용할 때 개인정보와 안전을 확인하는 지침이 발표됐습니다.",
+    author: null,
+    publisher: source.name,
+    publishedAt: "2026-08-11T00:00:00+09:00",
+    publishedAtPrecision: "date",
+    discoveredAt: "2026-08-13T06:00:00+09:00",
+  };
+}
+
+/**
+ * Mirrors the production collect artifact shape after carryRollingMaterials:
+ * this run collected one article with its own candidate and evidence, while a
+ * second article and its evidence were carried over from the recent editorial
+ * window and therefore have no candidate in this run.
+ */
+function carriedIngestionResult(): NewsIngestionResult {
+  const source = RSS_SOURCE_REGISTRY[0];
+  const todayInput = articleInput(source, "today");
+  const today = normalizeArticle(todayInput, source);
+  const carried = normalizeArticle(articleInput(source, "carried"), source);
+  const todayEvidence = createRssExcerptEvidenceItem(today, source);
+  const carriedEvidence = createRssExcerptEvidenceItem(carried, source);
+  if (!todayEvidence || !carriedEvidence) {
+    throw new Error("TEST_EVIDENCE_REQUIRED");
+  }
+  return {
+    status: "succeeded",
+    outcomes: [
+      {
+        sourceId: source.sourceId,
+        status: "succeeded",
+        startedAt: "2026-08-13T06:00:00+09:00",
+        finishedAt: "2026-08-13T06:00:01+09:00",
+        items: [todayInput],
+        issues: [],
+      },
+    ],
+    collectedCount: 1,
+    normalizedCount: 1,
+    deduplicatedCount: 1,
+    carriedCount: 1,
+    storage: { insertedCount: 1, duplicateCount: 0, totalCount: 1 },
+    articles: [today, carried],
+    evidenceItems: [todayEvidence, carriedEvidence],
+    candidates: [
+      {
+        articleId: today.articleId,
+        evidenceIds: [todayEvidence.evidenceId],
+        score: {
+          version: "topic-score-v1",
+          total: 33,
+          novelty: 20,
+          reliability: 13,
+          socialMeaning: 0,
+          elementaryRelevance: 0,
+          aiDigitalSpecificity: 0,
+        },
+        signals: {
+          novelty: 1,
+          reliability: 0.66,
+          socialMeaning: 0,
+          elementaryRelevance: 0,
+          aiDigitalSpecificity: 0,
+        },
+        threshold: {
+          passed: false,
+          failures: [{ threshold: "total", actual: 33, minimum: 70 }],
+        },
+      },
+    ],
     runIssues: [],
   };
 }
@@ -101,6 +189,43 @@ describe("MemoryPipelineWorkspaceRepository", () => {
     expect(second).toEqual({ ...first, created: false });
     expect(first.outputReference).toContain(".collect.news_ingestion.");
     expect(first.payloadFingerprint).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("최근 7일에서 이월한 근거는 후보에 연결되지 않아도 저장·재조회된다", async () => {
+    const repository = new MemoryPipelineWorkspaceRepository();
+    const artifact = {
+      kind: "news_ingestion" as const,
+      value: carriedIngestionResult(),
+    };
+
+    const stored = await repository.putArtifact({
+      runId: RUN_ID,
+      stage: "collect",
+      configurationFingerprint: CONFIG_FINGERPRINT,
+      parentOutputReferences: [],
+      artifact,
+    });
+    const reread = await repository.getArtifact(stored.outputReference);
+
+    expect(reread).toEqual(artifact);
+  });
+
+  it("이번 실행에서 수집한 기사의 근거가 후보에 연결되지 않으면 거부한다", async () => {
+    const repository = new MemoryPipelineWorkspaceRepository();
+    const value = carriedIngestionResult();
+    // Detach today's own evidence while leaving it in evidenceItems.
+    value.candidates[0].evidenceIds = [];
+
+    await expectWorkspaceError(
+      repository.putArtifact({
+        runId: RUN_ID,
+        stage: "collect",
+        configurationFingerprint: CONFIG_FINGERPRINT,
+        parentOutputReferences: [],
+        artifact: { kind: "news_ingestion", value },
+      }),
+      "INVALID_ARTIFACT",
+    );
   });
 
   it("같은 실행·단계에 다른 payload를 덮어쓰지 않는다", async () => {

@@ -27,6 +27,7 @@ import type {
 import {
   MemoryPipelineWorkspaceRepository,
   PipelineWorkspaceError,
+  parseArtifact as parseWorkspaceArtifactPayload,
   type PipelineWorkspaceArtifact,
   type PipelineWorkspaceArtifactMetadata,
   type PipelineWorkspaceErrorCode,
@@ -364,6 +365,17 @@ export function createSupabasePipelineArtifactDescriptor(input: Readonly<{
   }
   if (!hasRequiredParent) {
     throw new PipelineWorkspaceError("INVALID_ARTIFACT_LINEAGE");
+  }
+
+  // Reading an artifact back re-validates its payload against the runtime
+  // contract, so every write must satisfy that same contract here. Domain RPCs
+  // persist artifacts without going through this repository's own putArtifact
+  // validation; without this check such a payload is only rejected much later,
+  // when a subsequent stage tries to read it.
+  if (input.artifact.kind === "publication") {
+    parsePublication(input.artifact);
+  } else {
+    parseWorkspaceArtifactPayload(input.artifact);
   }
 
   const payload = structuredClone(input.artifact);
