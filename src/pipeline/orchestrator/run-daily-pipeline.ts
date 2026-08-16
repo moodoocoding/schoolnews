@@ -506,6 +506,15 @@ function stepError(error: unknown): DailyStepError {
     : new DailyStepError("UNKNOWN_ERROR", false, { cause: error });
 }
 
+// A stable, safe-to-log diagnostic tag: the error's constructor name plus its
+// `code` property when present (e.g. PipelineWorkspaceError's specific
+// reason), without ever including payloads, article text or credentials.
+function diagnosticErrorTag(error: unknown): string {
+  if (!(error instanceof Error)) return typeof error;
+  const code = "code" in error ? String((error as { code: unknown }).code) : null;
+  return code ? `${error.name}:${code}` : error.name;
+}
+
 /**
  * Runs an injected daily workflow with lease fencing, bounded retries and an
  * immutable attempt journal. This layer does not choose a database or scheduler.
@@ -778,7 +787,7 @@ export async function runDailyPipeline(
       console.error(
         "daily_stage_reuse_check_threw",
         definition.stage,
-        caught instanceof Error ? caught.name : typeof caught,
+        diagnosticErrorTag(caught),
       );
     }
     if (!reusable) {
@@ -1013,7 +1022,7 @@ export async function runDailyPipeline(
       console.error(
         "daily_stage_input_fingerprint_failure",
         definition.stage,
-        caught instanceof Error ? caught.name : typeof caught,
+        diagnosticErrorTag(caught),
       );
       return finish("blocked", now(), "INVALID_SOURCE_DATA");
     }
