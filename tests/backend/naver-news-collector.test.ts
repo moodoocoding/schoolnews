@@ -108,14 +108,65 @@ describe("Naver news metadata collector", () => {
     });
   });
 
-  it("fails without retry when the proxy rejects a request", async () => {
+  it("isolates every query failure instead of failing the whole batch", async () => {
     const fetchImpl = vi.fn(async () => new Response("quota", { status: 429 }));
+    const outcomes = await collectNaverNewsSources({
+      sources: createNaverPublisherSources(),
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(NAVER_NEWS_QUERIES.length);
+    for (const outcome of outcomes.values()) {
+      expect(outcome.status).toBe("failed");
+      expect(outcome.items).toHaveLength(0);
+      expect(outcome.issues.length).toBeGreaterThan(0);
+      expect(outcome.issues[0]?.code).toBe("SOURCE_UNAVAILABLE");
+      expect(outcome.issues[0]?.message).toContain("429");
+    }
+  });
+
+  it("keeps items from queries that succeed when one query fails (partial)", async () => {
+    let call = 0;
+    const fetchImpl = vi.fn(async () => {
+      call += 1;
+      if (call === 1) return new Response("quota", { status: 429 });
+      return response([
+        {
+          rank: 1,
+          title: "AI 정책 관련 기사",
+          description: "정책 관련 설명입니다.",
+          link: "https://n.news.naver.com/article/002",
+          original_link: "https://www.donga.com/news/Society/article/all/20260813/2",
+          pub_date: "Thu, 13 Aug 2026 09:00:00 +0900",
+          pub_date_iso: "2026-08-13T00:00:00.000Z",
+          source: "naver-openapi",
+        },
+      ]);
+    });
+    const outcomes = await collectNaverNewsSources({
+      sources: createNaverPublisherSources(),
+      fetchImpl,
+      now: () => new Date("2026-08-13T01:00:00.000Z"),
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(NAVER_NEWS_QUERIES.length);
+    const donga = outcomes.get("naver-summary-donga");
+    expect(donga?.status).toBe("partial");
+    expect(donga?.items.length).toBeGreaterThan(0);
+    expect(donga?.issues.length).toBeGreaterThan(0);
+  });
+
+  it("aborts the whole batch immediately when the outer signal is aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn(async () => response([]));
     await expect(
       collectNaverNewsSources({
         sources: createNaverPublisherSources(),
         fetchImpl,
+        signal: controller.signal,
       }),
-    ).rejects.toThrow("NAVER_NEWS_PROXY_429");
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    ).resolves.toBeInstanceOf(Map);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

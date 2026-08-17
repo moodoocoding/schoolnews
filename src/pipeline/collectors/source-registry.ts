@@ -29,6 +29,8 @@ const KOCCA_RSS_GUIDE =
   "https://www.kocca.kr/kocca/subPage.do?menuNo=204917";
 const NEWSIS_TECH_RSS = "https://www.newsis.com/RSS/health.xml";
 const NEWSIS_RSS_GUIDE = "https://www.newsis.com/RSS/";
+const AITIMES_COM_RSS = "https://cdn.aitimes.com/rss/gn_rss_allArticle.xml";
+const AITIMES_COM_GUIDE = "https://www.aitimes.com/";
 
 export type RssSourceReviewRecord = Readonly<{
   organization: string;
@@ -77,6 +79,25 @@ export const RSS_SOURCE_REVIEW_RECORDS: readonly RssSourceReviewRecord[] =
         "https://it.donga.com/rss/",
         "https://it.donga.com/robots.txt",
       ],
+    },
+    {
+      organization: "인공지능신문(aitimes.kr)",
+      status: "not_enabled",
+      reason:
+        "공식 RSS(/rss/allArticle.xml)를 확인했고 robots.txt도 이를 차단하지 않지만, 서버가 이 피드를 text/html로 잘못 응답합니다. 현재 RSS 수집기는 안전을 위해 XML 계열 content-type만 허용해 이 피드를 UNSUPPORTED_CONTENT_TYPE으로 거부합니다. 이 소스 하나를 위해 전체 수집기의 content-type 허용 범위를 넓히는 대신 보류로 남깁니다.",
+      reviewedAt: "2026-08-17",
+      referenceUrls: [
+        "https://www.aitimes.kr/rss/allArticle.xml",
+        "https://www.aitimes.kr/robots.txt",
+      ],
+    },
+    {
+      organization: "더밀크(themiilk.com)",
+      status: "not_enabled",
+      reason:
+        "RSS/공개 API를 찾지 못했고, 페이지 메타데이터(free-article: false)와 별도 로그인 도메인(auth.themiilk.com)으로 볼 때 유료 구독 콘텐츠입니다. robots.txt 자체는 크롤링을 막지 않지만 유료 기사 본문을 스크레이핑하면 저작권·이용약관 문제가 생길 수 있어 크롤러를 만들지 않았습니다.",
+      reviewedAt: "2026-08-17",
+      referenceUrls: ["https://www.themiilk.com/topics/ai"],
     },
   ]);
 
@@ -283,5 +304,37 @@ export const RSS_SOURCE_REGISTRY: readonly SourceRegistryEntry[] = Object.freeze
     },
     notes:
       "뉴시스 공식 IT·바이오 RSS입니다. 통신사 기사이므로 제목·링크·발행시각만 발견 정보로 저장하며 description, 본문, 독립 출처 점수에는 사용하지 않습니다.",
+  }),
+  sourceRegistryEntrySchema.parse({
+    sourceId: "aitimes-com",
+    name: "AI타임스",
+    publisherGroupId: "aitimes-com",
+    provenanceGroupPrefix: "aitimes-com",
+    collectionType: "rss",
+    feedUrl: AITIMES_COM_RSS,
+    siteUrl: AITIMES_COM_GUIDE,
+    publisherType: "news",
+    originType: "original_reporting",
+    sourceRole: "independent",
+    sourceType: "news",
+    authority: "none",
+    contentUse: "evidence",
+    locale: "ko-KR",
+    enabled: true,
+    accessStatus: "allowed",
+    accessReviewedAt: "2026-08-17T00:00:00+09:00",
+    policyReferenceUrls: [
+      AITIMES_COM_GUIDE,
+      "https://www.aitimes.com/robots.txt",
+    ],
+    requestPolicy: {
+      timeoutMs: 15_000,
+      minIntervalMs: 86_400_000,
+      maxResponseBytes: 1_500_000,
+      maxItemsPerRun: 50,
+      maxRedirects: 1,
+    },
+    notes:
+      "AI타임스 공식 전체기사 RSS입니다. robots.txt가 /admin/ 외에는 수집을 막지 않고, title·link·pubDate와 함께 실제 기사 요약 description을 제공해 근거로 사용합니다. 원문 본문과 첨부파일은 저장하지 않습니다.",
   }),
 ]);

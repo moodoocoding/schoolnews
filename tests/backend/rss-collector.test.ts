@@ -55,8 +55,8 @@ afterEach(() => {
 });
 
 describe("RSS 수집원 등록부", () => {
-  it("검토된 국내 공식·언론 피드 일곱 개만 하루 주기로 활성화한다", () => {
-    expect(RSS_SOURCE_REGISTRY).toHaveLength(7);
+  it("검토된 국내 공식·언론 피드 여덟 개만 하루 주기로 활성화한다", () => {
+    expect(RSS_SOURCE_REGISTRY).toHaveLength(8);
     expect(source).toMatchObject({
       sourceId: "msit-press-release",
       publisherGroupId: "msit",
@@ -78,6 +78,7 @@ describe("RSS 수집원 등록부", () => {
       "krcert-report-guide",
       "kocca-research",
       "newsis-tech-rss",
+      "aitimes-com",
     ]);
     expect(
       RSS_SOURCE_REGISTRY.find((entry) => entry.sourceId === "kisa-press-release")

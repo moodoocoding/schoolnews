@@ -8,13 +8,21 @@ const migration = readFileSync(
   "supabase/migrations/202608140023_expand_daily_source_policies.sql",
   "utf8",
 );
+const aitimesKoraiaMigration = readFileSync(
+  "supabase/migrations/202608170045_aitimes_koraia_source_policies.sql",
+  "utf8",
+);
 
 describe("expanded daily source policies", () => {
   it("registers every RSS source added after the original MSIT policy", () => {
     for (const source of RSS_SOURCE_REGISTRY.filter(
       (entry) => entry.sourceId !== "msit-press-release",
     )) {
-      expect(migration).toContain(`('${source.sourceId}', 86400000)`);
+      const expected = `('${source.sourceId}', 86400000)`;
+      expect(
+        migration.includes(expected) ||
+          aitimesKoraiaMigration.includes(expected),
+      ).toBe(true);
     }
   });
 

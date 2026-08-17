@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   sourceCollectionOutcomeSchema,
   sourceRegistryEntrySchema,
+  type CollectionIssue,
   type SourceCollectionOutcome,
   type SourceRegistryEntry,
 } from "../../contracts";
@@ -26,6 +27,7 @@ export const NAVER_NEWS_QUERIES = Object.freeze([
 ]);
 export const NAVER_NEWS_MAX_ITEMS_PER_QUERY = 100;
 export const NAVER_NEWS_MAX_TITLE_GRAPHEMES = 180;
+export const NAVER_NEWS_QUERY_TIMEOUT_MS = 15_000;
 
 const ALLOWED_PUBLISHERS = Object.freeze({
   "news.donga.com": { id: "donga", name: "동아일보", role: "independent" },
@@ -177,6 +179,13 @@ export function createNaverPublisherSources(): SourceRegistryEntry[] {
     );
 }
 
+/**
+ * One shared batch of NAVER_NEWS_QUERIES.length sequential upstream calls
+ * feeds every naver-summary-* source. Each query is isolated: a single
+ * timeout or upstream error is recorded as a CollectionIssue and the loop
+ * continues, so one bad call degrades coverage instead of failing all
+ * publishers at once. Only an outer abort (input.signal) stops the loop.
+ */
 export async function collectNaverNewsSources(input: {
   sources: readonly SourceRegistryEntry[];
   fetchImpl?: typeof fetch;
@@ -190,33 +199,57 @@ export async function collectNaverNewsSources(input: {
     input.sources.map((source) => [source.sourceId, sourceRegistryEntrySchema.parse(source)]),
   );
   const itemsBySource = new Map<string, NaverItem[]>();
+  const queryIssues: CollectionIssue[] = [];
 
   for (const query of NAVER_NEWS_QUERIES) {
-    const url = new URL(NAVER_NEWS_PROXY_PATH, NAVER_NEWS_PROXY_ORIGIN);
-    url.searchParams.set("q", query);
-    url.searchParams.set("display", String(NAVER_NEWS_MAX_ITEMS_PER_QUERY));
-    url.searchParams.set("sort", "date");
-    const response = await fetchImpl(url, {
-      method: "GET",
-      headers: { accept: "application/json" },
-      cache: "no-store",
-      signal: input.signal,
-    });
-    if (!response.ok) throw new Error(`NAVER_NEWS_PROXY_${response.status}`);
-    const payload = (await response.json()) as { items?: unknown };
-    if (!Array.isArray(payload.items)) throw new Error("NAVER_NEWS_RESPONSE_INVALID");
-    for (const raw of payload.items) {
-      if (raw === null || typeof raw !== "object") continue;
-      const candidate = raw as Partial<NaverItem>;
-      const originalUrl = normalizeOriginalUrl(candidate.original_link ?? candidate.link ?? "");
-      if (!originalUrl || typeof candidate.title !== "string" || typeof candidate.description !== "string" || typeof candidate.pub_date_iso !== "string") continue;
-      const publisher = publisherForUrl(originalUrl);
-      if (!publisher) continue;
-      const sourceId = `naver-summary-${publisher.id}`;
-      if (!sourceById.has(sourceId)) continue;
-      const items = itemsBySource.get(sourceId) ?? [];
-      items.push({ ...candidate, original_link: originalUrl } as NaverItem);
-      itemsBySource.set(sourceId, items);
+    if (input.signal?.aborted) break;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), NAVER_NEWS_QUERY_TIMEOUT_MS);
+    const signal = input.signal
+      ? AbortSignal.any([input.signal, controller.signal])
+      : controller.signal;
+    try {
+      const url = new URL(NAVER_NEWS_PROXY_PATH, NAVER_NEWS_PROXY_ORIGIN);
+      url.searchParams.set("q", query);
+      url.searchParams.set("display", String(NAVER_NEWS_MAX_ITEMS_PER_QUERY));
+      url.searchParams.set("sort", "date");
+      const response = await fetchImpl(url, {
+        method: "GET",
+        headers: { accept: "application/json" },
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) throw new Error(`NAVER_NEWS_PROXY_HTTP_${response.status}`);
+      const payload = (await response.json()) as { items?: unknown };
+      if (!Array.isArray(payload.items)) throw new Error("NAVER_NEWS_RESPONSE_INVALID");
+      for (const raw of payload.items) {
+        if (raw === null || typeof raw !== "object") continue;
+        const candidate = raw as Partial<NaverItem>;
+        const originalUrl = normalizeOriginalUrl(candidate.original_link ?? candidate.link ?? "");
+        if (!originalUrl || typeof candidate.title !== "string" || typeof candidate.description !== "string" || typeof candidate.pub_date_iso !== "string") continue;
+        const publisher = publisherForUrl(originalUrl);
+        if (!publisher) continue;
+        const sourceId = `naver-summary-${publisher.id}`;
+        if (!sourceById.has(sourceId)) continue;
+        const items = itemsBySource.get(sourceId) ?? [];
+        items.push({ ...candidate, original_link: originalUrl } as NaverItem);
+        itemsBySource.set(sourceId, items);
+      }
+    } catch (error) {
+      if (input.signal?.aborted) throw error;
+      const code: CollectionIssue["code"] = controller.signal.aborted
+        ? "COLLECTION_TIMEOUT"
+        : "SOURCE_UNAVAILABLE";
+      const detail =
+        error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      queryIssues.push({
+        code,
+        message: `네이버 뉴스 검색 쿼리("${query}") 호출 실패: ${detail}`.slice(0, 500),
+        retryable: true,
+        itemIndex: null,
+      });
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -243,15 +276,23 @@ export async function collectNaverNewsSources(input: {
         publishedAtPrecision: "instant" as const,
         discoveredAt: now().toISOString(),
       }));
+    const status: SourceCollectionOutcome["status"] =
+      items.length > 0
+        ? queryIssues.length > 0
+          ? "partial"
+          : "succeeded"
+        : queryIssues.length > 0
+          ? "failed"
+          : "succeeded";
     outcomes.set(
       sourceId,
       sourceCollectionOutcomeSchema.parse({
         sourceId,
-        status: "succeeded",
+        status,
         startedAt,
         finishedAt: now().toISOString(),
         items,
-        issues: [],
+        issues: status === "succeeded" ? [] : queryIssues,
       }),
     );
   }

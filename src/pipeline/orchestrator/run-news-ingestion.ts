@@ -107,6 +107,12 @@ function failedCollectionOutcome(
   });
 }
 
+function diagnosticErrorTag(error: unknown): string {
+  if (!(error instanceof Error)) return typeof error;
+  const code = "code" in error ? String((error as { code: unknown }).code) : null;
+  return code ? `${error.name}:${code}: ${error.message}` : `${error.name}: ${error.message}`;
+}
+
 async function collectIsolated(
   source: SourceRegistryEntry,
   collectSource: NonNullable<RunNewsIngestionOptions["collectSource"]>,
@@ -135,7 +141,10 @@ async function collectIsolated(
     return failedCollectionOutcome(
       source.sourceId,
       startedAt,
-      "수집기 예외를 해당 수집원의 실패로 격리했습니다.",
+      `수집기 예외를 해당 수집원의 실패로 격리했습니다. (${diagnosticErrorTag(error)})`.slice(
+        0,
+        500,
+      ),
       "SOURCE_UNAVAILABLE",
     );
   }

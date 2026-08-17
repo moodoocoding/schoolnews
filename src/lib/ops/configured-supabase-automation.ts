@@ -4,9 +4,12 @@ import { createConfiguredSupabasePipelineRepositories } from "../../db/supabase/
 import type { Environment } from "../config/env";
 import { createGeminiRawRoutes } from "../ai/gemini-factory";
 import {
+  collectKoraiaNewsSource,
   collectNaverNewsSources,
   collectRssSource,
+  createKoraiaSource,
   createNaverPublisherSources,
+  KORAIA_SOURCE_ID,
   RSS_SOURCE_REGISTRY,
 } from "../../pipeline/collectors";
 import {
@@ -88,7 +91,8 @@ export async function runConfiguredSupabaseAutomation(input: {
     apiKey: input.environment.GOOGLE_GENERATIVE_AI_API_KEY,
   });
   const naverSources = createNaverPublisherSources();
-  const sources = [...RSS_SOURCE_REGISTRY, ...naverSources];
+  const koraiaSource = createKoraiaSource();
+  const sources = [...RSS_SOURCE_REGISTRY, ...naverSources, koraiaSource];
   let naverOutcomesPromise:
     | ReturnType<typeof collectNaverNewsSources>
     | undefined;
@@ -104,6 +108,9 @@ export async function runConfiguredSupabaseAutomation(input: {
     collectSource: async (source, signal) => {
       if (source.collectionType === "rss") {
         return collectRssSource(source, { signal });
+      }
+      if (source.sourceId === KORAIA_SOURCE_ID) {
+        return collectKoraiaNewsSource({ source, signal });
       }
       naverOutcomesPromise ??= collectNaverNewsSources({
         sources: naverSources,
@@ -128,7 +135,7 @@ export async function runConfiguredSupabaseAutomation(input: {
           apiSummarySources: documents.sources,
         }),
     },
-    collectionConfigurationId: "official-rss-and-naver-summaries-v4",
+    collectionConfigurationId: "official-rss-and-naver-summaries-v5",
     previousPostTitles: history.titles,
     previousContentFingerprints: history.contentFingerprints,
     latestPublicationDateKst: history.latestPublicationDateKst,
