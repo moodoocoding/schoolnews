@@ -135,7 +135,7 @@ export async function runConfiguredSupabaseAutomation(input: {
           apiSummarySources: documents.sources,
         }),
     },
-    collectionConfigurationId: "official-rss-and-naver-summaries-v5",
+    collectionConfigurationId: "official-rss-and-naver-summaries-v6",
     previousPostTitles: history.titles,
     previousContentFingerprints: history.contentFingerprints,
     latestPublicationDateKst: history.latestPublicationDateKst,

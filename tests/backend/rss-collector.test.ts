@@ -55,8 +55,8 @@ afterEach(() => {
 });
 
 describe("RSS 수집원 등록부", () => {
-  it("검토된 국내 공식·언론 피드 여덟 개만 하루 주기로 활성화한다", () => {
-    expect(RSS_SOURCE_REGISTRY).toHaveLength(8);
+  it("검토된 국내 공식·언론 피드 아홉 개만 하루 주기로 활성화한다", () => {
+    expect(RSS_SOURCE_REGISTRY).toHaveLength(9);
     expect(source).toMatchObject({
       sourceId: "msit-press-release",
       publisherGroupId: "msit",
@@ -79,6 +79,7 @@ describe("RSS 수집원 등록부", () => {
       "kocca-research",
       "newsis-tech-rss",
       "aitimes-com",
+      "aitimes-kr",
     ]);
     expect(
       RSS_SOURCE_REGISTRY.find((entry) => entry.sourceId === "kisa-press-release")
@@ -265,6 +266,38 @@ describe("안전한 RSS 수집", () => {
 
     expect(malformed.issues[0].code).toBe("INVALID_SOURCE_DATA");
     expect(unsupported.issues[0].code).toBe("UNSUPPORTED_CONTENT_TYPE");
+  });
+
+  it("text/html로 잘못 응답해도 본문이 실제 RSS XML이면 수집한다(인공지능신문 패턴)", async () => {
+    const mislabeledFetch = vi.fn(async () =>
+      response(validRss, {
+        headers: { "content-type": "text/html; charset=UTF-8" },
+      })) as unknown as typeof fetch;
+
+    const outcome = await collectRssSource(source, {
+      fetch: mislabeledFetch,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.status).not.toBe("failed");
+    expect(outcome.items.length).toBeGreaterThan(0);
+  });
+
+  it("text/html이면서 본문도 진짜 HTML이면 여전히 거부한다", async () => {
+    const realHtmlFetch = vi.fn(async () =>
+      response("<!doctype html><html><body>404</body></html>", {
+        headers: { "content-type": "text/html; charset=UTF-8" },
+      })) as unknown as typeof fetch;
+
+    const outcome = await collectRssSource(source, {
+      fetch: realHtmlFetch,
+      lookup: publicLookup,
+      now: fixedNow,
+    });
+
+    expect(outcome.status).toBe("failed");
+    expect(outcome.issues[0].code).toBe("UNSUPPORTED_CONTENT_TYPE");
   });
 
   it("허용 크기를 초과한 응답을 읽기 전에 거부한다", async () => {

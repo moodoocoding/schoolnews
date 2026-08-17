@@ -204,22 +204,26 @@ async function fetchRssXml(
       ?.split(";", 1)[0]
       .trim()
       .toLowerCase();
-    if (contentType === undefined || !XML_CONTENT_TYPES.has(contentType)) {
+    const isDeclaredXml = contentType !== undefined && XML_CONTENT_TYPES.has(contentType);
+    // Some CMSes (e.g. 인공지능신문) serve a genuine RSS body under
+    // text/html. Only that one mislabel gets a second chance, and only if
+    // the body itself unambiguously opens as XML/RSS/Atom/RDF -- a real
+    // HTML error or redirect page always opens with <!doctype or <html and
+    // still fails this check.
+    if (!isDeclaredXml && contentType !== "text/html") {
       throw new CollectorError(
         "UNSUPPORTED_CONTENT_TYPE",
         "RSS 수집원이 XML 형식으로 응답하지 않았습니다.",
       );
     }
 
+    let xml: string;
     try {
-      return {
-        baseUrl: safeUrl.toString(),
-        xml: await readLimitedText(
-          response,
-          source.requestPolicy.maxResponseBytes,
-          signal,
-        ),
-      };
+      xml = await readLimitedText(
+        response,
+        source.requestPolicy.maxResponseBytes,
+        signal,
+      );
     } catch (error) {
       if (error instanceof CollectorError) {
         throw error;
@@ -237,6 +241,23 @@ async function fetchRssXml(
         { cause: error },
       );
     }
+
+    if (!isDeclaredXml) {
+      const sniff = xml.trimStart().slice(0, 200).toLowerCase();
+      const looksLikeXmlFeed =
+        sniff.startsWith("<?xml") ||
+        sniff.startsWith("<rss") ||
+        sniff.startsWith("<feed") ||
+        sniff.startsWith("<rdf");
+      if (!looksLikeXmlFeed) {
+        throw new CollectorError(
+          "UNSUPPORTED_CONTENT_TYPE",
+          "RSS 수집원이 XML 형식으로 응답하지 않았습니다.",
+        );
+      }
+    }
+
+    return { baseUrl: safeUrl.toString(), xml };
   }
 
   throw new CollectorError(

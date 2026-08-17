@@ -12,6 +12,10 @@ const aitimesKoraiaMigration = readFileSync(
   "supabase/migrations/202608170045_aitimes_koraia_source_policies.sql",
   "utf8",
 );
+const aitimesKrMigration = readFileSync(
+  "supabase/migrations/202608170046_aitimes_kr_source_policy.sql",
+  "utf8",
+);
 
 describe("expanded daily source policies", () => {
   it("registers every RSS source added after the original MSIT policy", () => {
@@ -21,7 +25,8 @@ describe("expanded daily source policies", () => {
       const expected = `('${source.sourceId}', 86400000)`;
       expect(
         migration.includes(expected) ||
-          aitimesKoraiaMigration.includes(expected),
+          aitimesKoraiaMigration.includes(expected) ||
+          aitimesKrMigration.includes(expected),
       ).toBe(true);
     }
   });
