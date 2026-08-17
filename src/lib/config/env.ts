@@ -61,6 +61,16 @@ const environmentSchema = z
       .enum(["true", "false"])
       .default("false"),
     CRON_SECRET: z.string().min(16).optional(),
+    /**
+     * "daily_force" is a deliberately temporary override: publish the best
+     * candidate in the 7-day rolling window every run instead of waiting
+     * for the normal 7-day gap. It still keeps the baseline topic
+     * relevance floor (TOPIC_SELECTION_THRESHOLDS) -- it is not a content
+     * quality bypass, only a publish-cadence bypass.
+     */
+    PUBLICATION_CADENCE_MODE: z
+      .enum(["quality_gated", "daily_force"])
+      .default("quality_gated"),
   })
   .strict()
   .superRefine((environment, context) => {
@@ -223,5 +233,6 @@ export function parseEnvironment(
     GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED:
       input.GEMINI_FREE_TIER_DATA_USE_ACKNOWLEDGED,
     CRON_SECRET: input.CRON_SECRET,
+    PUBLICATION_CADENCE_MODE: input.PUBLICATION_CADENCE_MODE,
   });
 }

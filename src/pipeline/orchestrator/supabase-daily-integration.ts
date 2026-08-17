@@ -52,6 +52,7 @@ import {
 import {
   decidePublicationCadence,
   PUBLICATION_CADENCE_VERSION,
+  type PublicationCadenceMode,
 } from "./publication-cadence";
 import {
   POST_GENERATION_PIPELINE_VERSION,
@@ -160,6 +161,8 @@ export interface CreateSupabaseDailyStagesOptions {
   previousContentFingerprints?: readonly string[];
   latestPublicationDateKst?: string | null;
   forceCadenceBootstrap?: boolean;
+  /** Defaults to "quality_gated" -- see PublicationCadenceMode for what "daily_force" changes. */
+  cadenceMode?: PublicationCadenceMode;
   editorialMaterials?: Pick<SupabaseEditorialMaterialsRepository, "getRolling">;
 }
 
@@ -550,6 +553,7 @@ export function createSupabaseDailyStages(
     publicationCadenceVersion: PUBLICATION_CADENCE_VERSION,
     latestPublicationDateKst: options.latestPublicationDateKst ?? null,
     forceCadenceBootstrap: options.forceCadenceBootstrap === true,
+    cadenceMode: options.cadenceMode ?? "quality_gated",
     sources,
     previousPostTitles,
     previousContentFingerprints,
@@ -807,6 +811,7 @@ export function createSupabaseDailyStages(
         runDate: context.runDate,
         latestPublicationDateKst: options.latestPublicationDateKst ?? null,
         forceBootstrap: options.forceCadenceBootstrap,
+        mode: options.cadenceMode,
       });
       const editorialMaterials = selectEditorialWindowMaterials({
         runDate: context.runDate,

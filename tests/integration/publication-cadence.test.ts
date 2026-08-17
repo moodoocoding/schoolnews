@@ -44,3 +44,35 @@ describe("최대 7일 발행 간격", () => {
     ).toMatchObject({ forceBestCandidate: true, reason: "bootstrap" });
   });
 });
+
+describe("daily_force 모드", () => {
+  it("발행 다음날이라도 7일 후보를 강제 선택 모드로 보낸다", () => {
+    expect(
+      decidePublicationCadence({
+        runDate: "2026-08-14",
+        latestPublicationDateKst: "2026-08-13",
+        mode: "daily_force",
+      }),
+    ).toMatchObject({
+      daysSinceLastPublication: 1,
+      forceBestCandidate: true,
+      candidateWindowDays: 7,
+      reason: "daily_force",
+    });
+  });
+
+  it("최초 실행에서도 daily_force 사유로 강제 선택 모드를 유지한다", () => {
+    expect(
+      decidePublicationCadence({
+        runDate: "2026-08-14",
+        latestPublicationDateKst: null,
+        mode: "daily_force",
+      }),
+    ).toMatchObject({
+      daysSinceLastPublication: null,
+      forceBestCandidate: true,
+      candidateWindowDays: 7,
+      reason: "daily_force",
+    });
+  });
+});

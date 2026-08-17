@@ -140,6 +140,7 @@ export async function runConfiguredSupabaseAutomation(input: {
     previousContentFingerprints: history.contentFingerprints,
     latestPublicationDateKst: history.latestPublicationDateKst,
     forceCadenceBootstrap: currentKstDate() === CADENCE_BOOTSTRAP_RUN_DATE,
+    cadenceMode: input.environment.PUBLICATION_CADENCE_MODE,
     limits: PRODUCTION_RUN_LIMITS,
     ownerId: input.ownerId,
     abortSignal: input.abortSignal,
